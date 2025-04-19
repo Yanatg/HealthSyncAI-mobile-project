@@ -1,16 +1,14 @@
-// YourAppNameApp.swift
+// HealthSyncAI-mobile-project/HealthSyncAI_mobile_projectApp.swift
+// MODIFY THE body Scene:
 import SwiftUI
 
 @main
 struct HealthSyncAI_mobile_projectApp: App {
-    // State to track authentication status and role
-    @State private var isLoggedIn: Bool = false // Check Keychain on launch in a real app
-    @State private var userRole: UserRole? = nil  // Check Keychain on launch
+    @State private var isLoggedIn: Bool = false
+    @State private var userRole: UserRole? = nil
 
     init() {
-        // Check keychain on app launch to see if already logged in
         if let token = KeychainHelper.standard.getAuthToken(), !token.isEmpty {
-             // Basic check, ideally validate token with backend too
              _isLoggedIn = State(initialValue: true)
              _userRole = State(initialValue: KeychainHelper.standard.getUserRole())
              print("User is already logged in with role: \(userRole?.rawValue ?? "Unknown")")
@@ -23,21 +21,36 @@ struct HealthSyncAI_mobile_projectApp: App {
         WindowGroup {
             if isLoggedIn {
                 // --- Navigate based on role ---
-                // You would replace these with your actual views
                 switch userRole {
                 case .patient:
-                    Text("Patient Dashboard (Health Record View)") // Replace with your Patient main view
-                        .navigationTitle("Patient")
-                        .onAppear { print("Showing Patient View") }
-                        // Add a logout button somewhere inside this view
+                    // Replace with actual Patient View later
+                    // For now, maybe show a placeholder or their records
+                     NavigationView { // Wrap patient view for consistency
+                         // Replace with PatientHealthRecordsView or PatientDashboard
+                         Text("Patient Dashboard (Placeholder)")
+                             .navigationTitle("Patient View")
+                             .toolbar { // Add a logout button
+                                 ToolbarItem(placement: .navigationBarLeading) {
+                                     Button("Logout") { performLogout() }
+                                 }
+                             }
+                     }
+                     .onAppear { print("Showing Patient View") }
+
                 case .doctor:
-                     Text("Doctor Dashboard (Doctor Note View)") // Replace with your Doctor main view
-                        .navigationTitle("Doctor")
+                     // *** USE THE NEW DOCTOR VIEW ***
+                     // The DoctorAppointmentsView already includes a NavigationView
+                     DoctorAppointmentsView()
                          .onAppear { print("Showing Doctor View") }
-                         // Add a logout button somewhere inside this view
+                         // Add logout capability within DoctorAppointmentsView or via a shared mechanism if needed
+
                 case .none:
-                     Text("Error: Role not found after login.")
-                     // Maybe force logout here
+                     // Handle error or force logout
+                     VStack {
+                         Text("Error: Role not found after login.")
+                         Button("Logout") { performLogout() }
+                             .padding()
+                     }
                 }
 
             } else {
@@ -45,5 +58,13 @@ struct HealthSyncAI_mobile_projectApp: App {
                 LoginView(isLoggedIn: $isLoggedIn, loggedInRole: $userRole)
             }
         }
+    }
+
+    // Helper function for logout logic
+    func performLogout() {
+        print("Performing logout...")
+        KeychainHelper.standard.clearAuthCredentials()
+        isLoggedIn = false
+        userRole = nil
     }
 }
