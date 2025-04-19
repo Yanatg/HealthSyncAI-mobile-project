@@ -70,6 +70,7 @@ class NetworkManager {
         }
     }
 
+    
     // --- Generic JSON request function ---
     func request<T: Decodable>(
         endpoint: String,
@@ -398,9 +399,29 @@ class NetworkManager {
     }
     // --- End login function ---
 
-    // Add other specific API call functions here...
-    // e.g., func fetchUserProfile() async throws -> UserProfile { ... }
-    // These would likely use the generic `request` function (which uses JSON)
+    func fetchDoctorAppointments() async throws -> [Appointment] {
+            let endpoint = "api/appointment/my-appointments" // Endpoint from React DoctorNoteForm
+            return try await request(endpoint: endpoint, method: "GET", requiresAuth: true)
+        }
+
+        // --- Fetch Health Records for a Specific Patient ---
+        func fetchPatientHealthRecords(patientId: Int) async throws -> [HealthRecord] {
+            let endpoint = "api/health-record/patient/\(patientId)" // Endpoint from React PatientHealthRecordPage
+            // Note: The response might be a single object or an array. Adjust T if needed.
+            // Assuming the API returns an array of records for the patient.
+            return try await request(endpoint: endpoint, method: "GET", requiresAuth: true)
+        }
+
+        // --- Create a New Doctor Note ---
+        func createDoctorNote(noteData: CreateDoctorNoteRequestBody) async throws -> HealthRecord {
+            // Endpoint from React NewDoctorNotePage
+            // The request body structure is defined by CreateDoctorNoteRequestBody
+            let endpoint = "api/health-record/doctor-note"
+            let body = try JSONEncoder().encode(noteData)
+
+            // Use the generic request function for POST with JSON body
+            return try await request(endpoint: endpoint, method: "POST", body: body, requiresAuth: true)
+        }
 }
 
 // Define an empty response type for API calls that return 2xx but no body
