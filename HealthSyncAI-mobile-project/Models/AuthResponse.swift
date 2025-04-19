@@ -4,7 +4,7 @@ import Foundation
 struct AuthResponse: Codable {
     let accessToken: String
     let tokenType: String
-    let userId: Int // Correct type based on your API response
+    let userId: Int  // Correct type based on your API response
 
     // Using CodingKeys is good practice even if defaults work, for clarity
     enum CodingKeys: String, CodingKey {
