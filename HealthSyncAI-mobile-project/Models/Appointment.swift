@@ -1,86 +1,55 @@
 // HealthSyncAI-mobile-project/Models/Appointment.swift
-// NEW FILE
 import Foundation
+import SwiftUI // Needed for Color
 
 struct Appointment: Codable, Identifiable {
     let id: Int
     let patientId: Int
     let doctorId: Int
-    let startTime: String // Keep as ISO string, format in View/ViewModel
-    let endTime: String   // Keep as ISO string, format in View/ViewModel
-    let status: String // "scheduled", "completed", "cancelled", "no_show"
-    let telemedicineUrl: String?
-    // health_record_id is optional and might not always be present directly
+    let startTime: String // Keep as ISO string for decoding
+    let endTime: String   // Keep as ISO string for decoding
+    let status: String // "scheduled", "completed", "cancelled", "no_show" etc.
+    let telemedicineUrl: String? // This should be optional
 
     enum CodingKeys: String, CodingKey {
-        case id
-        case patientId = "patient_id"
-        case doctorId = "doctor_id"
-        case startTime = "start_time"
-        case endTime = "end_time"
-        case status
-        case telemedicineUrl = "telemedicine_url"
-        // case healthRecordId = "health_record_id" // Only map if consistently present
-    }
-
-    // Helper for date formatting (can be moved to Utils)
-    var formattedStartTime: String {
-        formatDate(startTime)
-    }
-
-    var formattedEndTime: String {
-        formatDate(endTime)
-    }
-
-    var formattedDate: String {
-        formatDate(startTime, style: .date)
-    }
-
-    var formattedTimeRange: String {
-        let start = formatDate(startTime, style: .time)
-        let end = formatDate(endTime, style: .time)
-        return "\(start) - \(end)"
-    }
-
-    private func formatDate(_ dateString: String, style: DateStyle = .dateTime) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds] // Adjust based on your API's exact ISO format
-
-        guard let date = formatter.date(from: dateString) else {
-            // Fallback for slightly different ISO formats if needed
-            let alternativeFormatter = ISO8601DateFormatter()
-            alternativeFormatter.formatOptions = .withInternetDateTime
-            guard let altDate = alternativeFormatter.date(from: dateString) else {
-                print("⚠️ Could not parse date: \(dateString)")
-                return dateString // Return original string if parsing fails
-            }
-            return formatDisplayDate(altDate, style: style)
+            case id // Matches JSON key
+            case patientId // Strategy handles patient_id -> patientId
+            case doctorId  // Strategy handles doctor_id -> doctorId
+            case startTime // Strategy handles start_time -> startTime
+            case endTime   // Strategy handles end_time -> endTime
+            case status    // Matches JSON key
+            case telemedicineUrl // Strategy handles telemedicine_url -> telemedicineUrl
         }
-        return formatDisplayDate(date, style: style)
+
+    // --- Computed Properties (Replaced lazy var) ---
+
+    // Calculate the start Date object when needed
+    var startDate: Date? {
+        parseISO8601String(startTime)
     }
 
-    private func formatDisplayDate(_ date: Date, style: DateStyle) -> String {
-        let displayFormatter = DateFormatter()
-        displayFormatter.locale = Locale(identifier: "en_US_POSIX") // Consistent locale
-        switch style {
-        case .dateTime:
-            displayFormatter.dateStyle = .medium
-            displayFormatter.timeStyle = .short
-        case .date:
-            displayFormatter.dateStyle = .long // "MMMM d, yyyy"
-            displayFormatter.timeStyle = .none
-        case .time:
-            displayFormatter.dateStyle = .none
-            displayFormatter.timeStyle = .short // "h:mm a"
+    // Calculate the end Date object when needed
+    var endDate: Date? {
+        parseISO8601String(endTime)
+    }
+
+    // --- Display Formatting Helpers ---
+
+    var displayDate: String {
+        guard let date = startDate else { return "Invalid Date" } // Use the computed property
+        return DateFormatter.displayDateFormatter.string(from: date)
+    }
+
+    var displayTimeRange: String {
+        guard let start = startDate, let end = endDate else { // Use computed properties
+            return "Invalid Time"
         }
-        return displayFormatter.string(from: date)
+        let startStr = DateFormatter.displayTimeFormatter.string(from: start)
+        let endStr = DateFormatter.displayTimeFormatter.string(from: end)
+        return "\(startStr) - \(endStr)"
     }
 
-    enum DateStyle {
-        case dateTime, date, time
-    }
-
-    // Helper to determine status color (adapt as needed)
+    // Helper for status color (remains the same)
     var statusColor: Color {
         switch status.lowercased() {
         case "scheduled": return .blue
@@ -90,7 +59,41 @@ struct Appointment: Codable, Identifiable {
         default: return .gray
         }
     }
+
+    // Consolidated ISO8601 parsing function (remains the same)
+    private func parseISO8601String(_ dateString: String) -> Date? {
+        // Try with fractional seconds first
+        let formatterWithFractional = ISO8601DateFormatter()
+        formatterWithFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatterWithFractional.date(from: dateString) {
+            return date
+        }
+
+        // Fallback without fractional seconds
+        let formatterWithoutFractional = ISO8601DateFormatter()
+        formatterWithoutFractional.formatOptions = [.withInternetDateTime]
+        if let date = formatterWithoutFractional.date(from: dateString) {
+            return date
+        }
+
+        print("⚠️ Could not parse date string: \(dateString)")
+        return nil // Return nil if parsing fails completely
+    }
 }
 
-// Add SwiftUI import for Color
-import SwiftUI
+// Extend DateFormatter for reusable instances (remains the same)
+extension DateFormatter {
+    static let displayDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .long // e.g., "July 22, 2024"
+        formatter.timeStyle = .none
+        return formatter
+    }()
+
+    static let displayTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short // e.g., "10:30 AM"
+        return formatter
+    }()
+}
