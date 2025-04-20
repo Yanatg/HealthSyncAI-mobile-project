@@ -1,4 +1,5 @@
 // HealthSyncAI-mobile-project/Models/HealthRecord.swift
+// UPDATED FILE
 import Foundation
 
 // Corresponds to HealthRecord in React lib/type.ts and API response
@@ -18,19 +19,20 @@ struct HealthRecord: Codable, Identifiable {
     let createdAt: String
     let updatedAt: String
 
-    // CodingKeys for HealthRecord (Relies on .convertFromSnakeCase strategy)
-    // No changes needed here from the previous fix
+    // --- UPDATED CodingKeys for HealthRecord ---
+    // Explicitly map snake_case JSON keys to camelCase Swift properties
     enum CodingKeys: String, CodingKey {
-        case id, title, summary, symptoms, diagnosis, medication
-        case patientId
-        case doctorId
-        case recordType
-        case treatmentPlan
-        case triageRecommendation
-        case confidenceScore
-        case createdAt
-        case updatedAt
+        case id, title, summary, symptoms, diagnosis, medication // Keys matching Swift names
+        case patientId = "patient_id"             // Map snake_case to camelCase
+        case doctorId = "doctor_id"               // Map snake_case to camelCase
+        case recordType = "record_type"           // Map snake_case to camelCase
+        case treatmentPlan = "treatment_plan"       // Map snake_case to camelCase
+        case triageRecommendation = "triage_recommendation" // Map snake_case to camelCase
+        case confidenceScore = "confidence_score"     // Map snake_case to camelCase
+        case createdAt = "created_at"             // Map snake_case to camelCase
+        case updatedAt = "updated_at"             // Map snake_case to camelCase
     }
+    // --- END UPDATE ---
 
     // Helpers for display formatting (Keep as is)
     var formattedCreatedAt: String { formatDate(createdAt) }
@@ -69,6 +71,8 @@ struct HealthRecord: Codable, Identifiable {
 }
 
 // --- Nested Structures ---
+// These should already be correct with their custom initializers from previous steps,
+// handling their specific keys and ignoring the client-side 'id'. No changes needed below.
 
 // *** Symptom: Add custom init to ignore client-side id ***
 struct Symptom: Codable, Identifiable {
@@ -108,15 +112,14 @@ struct Symptom: Codable, Identifiable {
 struct Diagnosis: Codable, Identifiable {
     var id = UUID() // Client-side only
     var name: String
-    var icd10Code: String?
+    var icd10Code: String? // Keep camelCase for Swift property
     var description: String?
     var confidence: Double?
 
     // Define CodingKeys *only* for properties coming from JSON
-    // Relies on .convertFromSnakeCase strategy for icd10Code
     enum CodingKeys: String, CodingKey {
         case name, description, confidence
-        case icd10Code // Strategy handles icd10_code -> icd10Code
+        case icd10Code = "icd10_code" // Map JSON snake_case to Swift camelCase
         // DO NOT include 'id' here
     }
 
@@ -124,7 +127,7 @@ struct Diagnosis: Codable, Identifiable {
      init(from decoder: Decoder) throws {
          let container = try decoder.container(keyedBy: CodingKeys.self)
          name = try container.decode(String.self, forKey: .name)
-         icd10Code = try container.decodeIfPresent(String.self, forKey: .icd10Code)
+         icd10Code = try container.decodeIfPresent(String.self, forKey: .icd10Code) // Use the mapped key
          description = try container.decodeIfPresent(String.self, forKey: .description)
          confidence = try container.decodeIfPresent(Double.self, forKey: .confidence)
          // 'id' is NOT decoded
@@ -145,13 +148,12 @@ struct TreatmentPlan: Codable, Identifiable {
     var id = UUID() // Client-side only
     var description: String
     var duration: String?
-    var followUp: String?
+    var followUp: String? // Keep camelCase for Swift property
 
     // Define CodingKeys *only* for properties coming from JSON
-    // Relies on .convertFromSnakeCase strategy for followUp
     enum CodingKeys: String, CodingKey {
         case description, duration
-        case followUp // Strategy handles follow_up -> followUp
+        case followUp = "follow_up" // Map JSON snake_case to Swift camelCase
         // DO NOT include 'id' here
     }
 
@@ -160,7 +162,7 @@ struct TreatmentPlan: Codable, Identifiable {
          let container = try decoder.container(keyedBy: CodingKeys.self)
          description = try container.decode(String.self, forKey: .description)
          duration = try container.decodeIfPresent(String.self, forKey: .duration)
-         followUp = try container.decodeIfPresent(String.self, forKey: .followUp)
+         followUp = try container.decodeIfPresent(String.self, forKey: .followUp) // Use the mapped key
          // 'id' is NOT decoded
      }
 
