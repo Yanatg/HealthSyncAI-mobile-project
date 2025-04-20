@@ -1,7 +1,8 @@
 // HealthSyncAI-mobile-project/ViewModels/AuthViewModel.swift
+// UPDATED FILE
 import Foundation
 import Combine
-import SwiftUI // For Date type
+import SwiftUI // For Date
 
 @MainActor
 class AuthViewModel: ObservableObject {
@@ -63,9 +64,11 @@ class AuthViewModel: ObservableObject {
                 // --- Success: Save to Keychain FIRST ---
                 print("✅ Login successful!")
                 keychainHelper.saveAuthToken(authResponse.accessToken)
-                let userIdString = String(authResponse.userId)
-                keychainHelper.saveUserId(userIdString)
+                // --- FIX: Pass Int directly ---
+                keychainHelper.saveUserId(authResponse.userId)
+                // --- END FIX ---
                 keychainHelper.saveUserRole(roleToLoginAs) // Save the role used for login
+                keychainHelper.saveUsername(loginUsername) // Save the username used for login
 
                 // --- Update AppState ---
                 appState.login(role: roleToLoginAs, userId: authResponse.userId)
@@ -131,6 +134,7 @@ class AuthViewModel: ObservableObject {
 
             let registrationData: RegistrationData
             let roleToRegisterAs = registerSelectedRole // Capture role
+            let usernameToRegister = registerUsername.trimmingCharacters(in: .whitespaces) // Capture username
 
             // --- Use FLAT structure initializers ---
             if roleToRegisterAs == .patient {
@@ -139,7 +143,7 @@ class AuthViewModel: ObservableObject {
                 let dobString = dateFormatter.string(from: registerDateOfBirth)
 
                 let patientData = PatientRegistrationData( // Use the flat initializer
-                    username: registerUsername.trimmingCharacters(in: .whitespaces),
+                    username: usernameToRegister, // Use captured username
                     email: registerEmail.trimmingCharacters(in: .whitespacesAndNewlines),
                     password: registerPassword,
                     firstName: registerFirstName.trimmingCharacters(in: .whitespaces),
@@ -155,7 +159,7 @@ class AuthViewModel: ObservableObject {
                 registrationData = .patient(patientData)
             } else {
                 let doctorData = DoctorRegistrationData( // Use the flat initializer
-                    username: registerUsername.trimmingCharacters(in: .whitespaces),
+                    username: usernameToRegister, // Use captured username
                     email: registerEmail.trimmingCharacters(in: .whitespacesAndNewlines),
                     password: registerPassword,
                     firstName: registerFirstName.trimmingCharacters(in: .whitespaces),
@@ -174,11 +178,14 @@ class AuthViewModel: ObservableObject {
                         let authResponse = try await networkManager.registerUser(data: registrationData)
                         print("✅ Registration successful!")
 
-                        // --- Auto-Login after registration (remains the same) ---
+                        // --- Auto-Login after registration ---
                         keychainHelper.saveAuthToken(authResponse.accessToken)
-                        let userIdString = String(authResponse.userId)
-                        keychainHelper.saveUserId(userIdString)
+                        // --- FIX: Pass Int directly ---
+                        keychainHelper.saveUserId(authResponse.userId)
+                        // --- END FIX ---
                         keychainHelper.saveUserRole(roleToRegisterAs)
+                        keychainHelper.saveUsername(usernameToRegister) // Save the username used for registration
+
                         appState.login(role: roleToRegisterAs, userId: authResponse.userId)
                         self.registerPassword = ""
                         self.registerConfirmPassword = ""

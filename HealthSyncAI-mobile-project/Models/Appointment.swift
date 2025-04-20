@@ -81,6 +81,20 @@ struct Appointment: Codable, Identifiable {
     }
 }
 
+struct CreateAppointmentRequest: Codable {
+    let doctorId: Int
+    let startTime: String // ISO 8601 format string
+    let endTime: String   // ISO 8601 format string
+    let telemedicineUrl: String
+
+    enum CodingKeys: String, CodingKey {
+        case doctorId = "doctor_id"
+        case startTime = "start_time"
+        case endTime = "end_time"
+        case telemedicineUrl = "telemedicine_url"
+    }
+}
+
 // Extend DateFormatter for reusable instances (remains the same)
 extension DateFormatter {
     static let displayDateFormatter: DateFormatter = {
@@ -97,3 +111,4 @@ extension DateFormatter {
         return formatter
     }()
 }
+

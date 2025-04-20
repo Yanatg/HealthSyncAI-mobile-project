@@ -1,5 +1,5 @@
 // HealthSyncAI-mobile-project/Views/Patient/PatientRecordsView.swift
-// NEW FILE (Create a 'Patient' subfolder within Views if desired - though doctors access this too)
+// UPDATED FILE
 import SwiftUI
 
 struct PatientRecordsView: View {
@@ -7,7 +7,8 @@ struct PatientRecordsView: View {
     @StateObject private var viewModel: PatientRecordsViewModel
 
     // State to control sheet presentation for creating new note
-    @State private var showingCreateNoteSheet = false
+    // REMOVED: @State private var showingCreateNoteSheet = false
+    // Patients viewing their own records cannot create notes directly here.
 
     // Initialize with patientId
     init(patientId: Int) {
@@ -38,29 +39,31 @@ struct PatientRecordsView: View {
         }
         .navigationTitle("Patient #\(viewModel.patientId) Records")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    showingCreateNoteSheet = true
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                    Text("New Note")
-                }
-                .disabled(viewModel.isLoading) // Disable while loading initial records
-            }
-        }
-        .sheet(isPresented: $showingCreateNoteSheet) {
-            // Present the CreateDoctorNoteView as a sheet
-            NavigationView { // Embed in NavigationView for title/buttons inside sheet
-                 CreateDoctorNoteView(patientId: viewModel.patientId) { success in
-                     // This closure is called when the sheet is dismissed by the child view
-                     showingCreateNoteSheet = false
-                     if success {
-                         viewModel.fetchRecords() // Refresh records if save was successful
-                     }
-                 }
-            }
-        }
+        // --- REMOVED Toolbar Item for "New Note" ---
+        // .toolbar {
+        //     ToolbarItem(placement: .navigationBarTrailing) {
+        //         Button {
+        //             showingCreateNoteSheet = true
+        //         } label: {
+        //             Image(systemName: "plus.circle.fill")
+        //             Text("New Note")
+        //         }
+        //         .disabled(viewModel.isLoading) // Disable while loading initial records
+        //     }
+        // }
+        // --- REMOVED Sheet presentation ---
+        // .sheet(isPresented: $showingCreateNoteSheet) {
+        //     // Present the CreateDoctorNoteView as a sheet
+        //     NavigationView { // Embed in NavigationView for title/buttons inside sheet
+        //          CreateDoctorNoteView(patientId: viewModel.patientId) { success in
+        //              // This closure is called when the sheet is dismissed by the child view
+        //              showingCreateNoteSheet = false
+        //              if success {
+        //                  viewModel.fetchRecords() // Refresh records if save was successful
+        //              }
+        //          }
+        //     }
+        // }
         // No .onAppear needed here as VM fetches on init
     }
 }
