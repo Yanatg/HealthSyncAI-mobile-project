@@ -1,10 +1,19 @@
-// Utils/KeychainHelper.swift
+// HealthSyncAI-mobile-project/Utils/KeychainHelper.swift
+// UPDATED FILE
 import Foundation
 import Security
 
 class KeychainHelper {
     static let standard = KeychainHelper()
     private init() {}
+
+    // --- Make constants internal or public ---
+    // Changed from private to internal (default)
+    static let authService = "com.yourapp.auth" // Use your bundle ID or a unique name
+    static let tokenAccount = "userToken"
+    static let userIdAccount = "userId"
+    static let userRoleAccount = "userRole"
+    static let usernameAccount = "username" // Add account key for username/first name
 
     // Generic function to save data
     func save(_ data: Data, service: String, account: String) -> Bool {
@@ -91,63 +100,61 @@ class KeychainHelper {
     }
 
     // --- Convenience Methods for Your App ---
-    private let authService = "com.yourapp.auth" // Use your bundle ID or a unique name
-    private let tokenAccount = "userToken"
-    private let userIdAccount = "userId"
-    private let userRoleAccount = "userRole"
 
     func saveAuthToken(_ token: String) {
         guard let data = token.data(using: .utf8) else { return }
-        if save(data, service: authService, account: tokenAccount) {
+        if save(data, service: KeychainHelper.authService, account: KeychainHelper.tokenAccount) { // Use static property
             print("🔑 Token saved to Keychain.")
         }
     }
 
     func getAuthToken() -> String? {
-        guard let data = readData(service: authService, account: tokenAccount) else { return nil }
+        guard let data = readData(service: KeychainHelper.authService, account: KeychainHelper.tokenAccount) else { return nil } // Use static property
         return String(data: data, encoding: .utf8)
     }
 
-    func saveUserId(_ id: String) {
-        guard let data = id.data(using: .utf8) else { return }
-        if save(data, service: authService, account: userIdAccount) {
+     func saveUserId(_ id: Int) { // Save as Int directly if possible
+        let idString = String(id)
+        guard let data = idString.data(using: .utf8) else { return }
+        if save(data, service: KeychainHelper.authService, account: KeychainHelper.userIdAccount) { // Use static property
             print("🔑 User ID saved to Keychain.")
         }
     }
 
-    // << --- ADDED THIS FUNCTION --- >>
-    func getUserId() -> String? {
-        guard let data = readData(service: authService, account: userIdAccount) else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-    // << --- END ADDED FUNCTION --- >>
-
-
-    // Now getUserIdAsInt() can call the function above
+    // No need for separate getUserId() string function if always converting to Int
     func getUserIdAsInt() -> Int? {
-        guard let userIdString = getUserId() else { return nil } // Line 110 should now compile
+        guard let data = readData(service: KeychainHelper.authService, account: KeychainHelper.userIdAccount), // Use static property
+              let userIdString = String(data: data, encoding: .utf8) else { return nil }
         return Int(userIdString)
     }
 
-
     func saveUserRole(_ role: UserRole) {
         guard let data = role.rawValue.data(using: .utf8) else { return }
-         if save(data, service: authService, account: userRoleAccount) {
+         if save(data, service: KeychainHelper.authService, account: KeychainHelper.userRoleAccount) { // Use static property
             print("🔑 User Role saved to Keychain.")
          }
     }
 
      func getUserRole() -> UserRole? {
-         guard let data = readData(service: authService, account: userRoleAccount),
+         guard let data = readData(service: KeychainHelper.authService, account: KeychainHelper.userRoleAccount), // Use static property
                let roleString = String(data: data, encoding: .utf8) else { return nil }
          return UserRole(rawValue: roleString)
      }
 
+     // --- ADDED: Save Username ---
+     func saveUsername(_ username: String) {
+         guard let data = username.data(using: .utf8) else { return }
+         if save(data, service: KeychainHelper.authService, account: KeychainHelper.usernameAccount) { // Use static property
+             print("🔑 Username saved to Keychain.")
+         }
+     }
 
     func clearAuthCredentials() {
-        _ = delete(service: authService, account: tokenAccount)
-        _ = delete(service: authService, account: userIdAccount)
-        _ = delete(service: authService, account: userRoleAccount)
-         print("🔑 Auth credentials cleared from Keychain.")
+        // Use static properties
+        _ = delete(service: KeychainHelper.authService, account: KeychainHelper.tokenAccount)
+        _ = delete(service: KeychainHelper.authService, account: KeychainHelper.userIdAccount)
+        _ = delete(service: KeychainHelper.authService, account: KeychainHelper.userRoleAccount)
+        _ = delete(service: KeychainHelper.authService, account: KeychainHelper.usernameAccount) // Clear username too
+        print("🔑 Auth credentials cleared from Keychain.")
     }
 }
