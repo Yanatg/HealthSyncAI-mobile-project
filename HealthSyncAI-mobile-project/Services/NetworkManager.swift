@@ -249,9 +249,7 @@ class NetworkManager {
             case 200...299:
                 do {
                     let decoder = JSONDecoder()
-                    // NOTE: Multipart responses might not use snake_case keys consistently.
-                    // If login response uses snake_case, uncomment this. Otherwise, leave it commented.
-                     // decoder.keyDecodingStrategy = .convertFromSnakeCase
+                    decoder.keyDecodingStrategy = .convertFromSnakeCase // <<< ENSURE THIS IS STILL HERE
                     let decodedObject = try decoder.decode(T.self, from: data)
                     return decodedObject
                 } catch {
