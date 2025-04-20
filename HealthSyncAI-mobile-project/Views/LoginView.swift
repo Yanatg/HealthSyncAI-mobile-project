@@ -2,99 +2,107 @@
 import SwiftUI
 
 struct LoginView: View {
+    // Use the single AuthViewModel, but this view focuses on LOGIN properties
     @StateObject private var viewModel = AuthViewModel()
-
-    // Bindings to the parent view's (App) state
-    @Binding var isLoggedIn: Bool
-    // **** CHANGE BINDING NAME HERE ****
-    @Binding var userRole: UserRole? // Renamed from loggedInRole to match App's state variable
+    @EnvironmentObject private var appState: AppState
 
     var body: some View {
-        VStack(spacing: 20) {
-            Spacer()
+        NavigationView {
+            VStack(spacing: 20) {
+                Spacer()
 
-            Text("Welcome Back!")
-                .font(.largeTitle)
-                .fontWeight(.semibold)
+                Text("Welcome Back!")
+                    .font(.largeTitle)
+                    .fontWeight(.semibold)
 
-            // --- Role Selection ---
-            Picker("Login As", selection: $viewModel.selectedRole) {
-                ForEach(UserRole.allCases) { role in
-                    Text(role.rawValue).tag(role)
-                }
-            }
-            .pickerStyle(.segmented)
-
-            // --- Input Fields ---
-            VStack(spacing: 15) {
-                TextField("Username", text: $viewModel.username)
-                    .keyboardType(.emailAddress)
-                    .textContentType(.username)
-                    .autocapitalization(.none)
-                    .padding()
-                    .background(Color(UIColor.secondarySystemBackground))
-                    .cornerRadius(8)
-
-                SecureField("Password", text: $viewModel.password)
-                    .textContentType(.password)
-                    .padding()
-                    .background(Color(UIColor.secondarySystemBackground))
-                    .cornerRadius(8)
-            }
-
-            // --- Error Message ---
-            if let error = viewModel.errorMessage, !viewModel.isLoading {
-                Text(error)
-                    .foregroundColor(.red)
-                    .font(.caption)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 5)
-            }
-
-            // --- Login Button ---
-            Button {
-                viewModel.login()
-            } label: {
-                HStack {
-                    if viewModel.isLoading {
-                        ProgressView()
-                            .tint(.white)
-                    } else {
-                        Text("Login as \(viewModel.selectedRole.rawValue)")
+                // --- Role Selection (Uses selectedLoginRole) ---
+                Picker("Login As", selection: $viewModel.selectedLoginRole) { // Bind to login role
+                    ForEach(UserRole.allCases) { role in
+                        Text(role.rawValue).tag(role)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .foregroundColor(.white)
-                .background(viewModel.isLoading ? Color.gray : Color.blue)
-                .cornerRadius(10)
+                .pickerStyle(.segmented)
+
+                // --- Input Fields (Use loginUsername, loginPassword) ---
+                VStack(spacing: 15) {
+                    TextField("Username", text: $viewModel.loginUsername) // Bind to login username
+                        .keyboardType(.default)
+                        .textContentType(.username)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+                        .padding()
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(8)
+
+                    SecureField("Password", text: $viewModel.loginPassword) // Bind to login password
+                        .textContentType(.password)
+                        .padding()
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(8)
+                }
+
+                // --- Error Message ---
+                if let error = viewModel.errorMessage, !viewModel.isLoading {
+                    Text(error)
+                        .foregroundColor(.red)
+                        .font(.caption)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                // --- Login Button ---
+                Button {
+                    // Clear registration fields before login attempt (optional, good practice)
+                    // viewModel.clearRegistrationFields()
+                    viewModel.login(appState: appState)
+                } label: {
+                    HStack {
+                        if viewModel.isLoading {
+                            ProgressView().tint(.white)
+                        } else {
+                             // Display the selected LOGIN role
+                            Text("Login as \(viewModel.selectedLoginRole.rawValue)")
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .foregroundColor(.white)
+                    .background(viewModel.isLoading ? Color.gray : Color.accentColor)
+                    .cornerRadius(10)
+                }
+                // Disable based on LOGIN fields
+                .disabled(viewModel.isLoading || viewModel.loginUsername.isEmpty || viewModel.loginPassword.isEmpty)
+
+                Spacer()
+
+                // --- Sign Up Navigation ---
+                NavigationLink {
+                    // Pass the SAME viewModel instance to RegistrationView
+                    RegistrationView(viewModel: viewModel)
+                } label: {
+                    Text("Don't have an account? Sign Up")
+                }
+                .padding(.bottom)
             }
-            .disabled(viewModel.isLoading)
-
-            Spacer()
-
-            Button("Don't have an account? Sign Up") {
-                print("Navigate to Sign Up")
+            .padding(.horizontal, 30)
+            .navigationBarHidden(true)
+            .onAppear {
+                // Clear registration fields when returning to login (optional)
+                // viewModel.clearRegistrationFields()
+                // Clear any potential error message from registration attempt
+                viewModel.errorMessage = nil
             }
-            .padding(.bottom)
-
         }
-        .padding(.horizontal, 30)
-        .onChange(of: viewModel.loggedInUserRole) { newRole in
-            if let validRole = newRole {
-                isLoggedIn = true
-                // **** UPDATE ASSIGNMENT HERE ****
-                userRole = validRole // Assign to the renamed binding variable
-                print("LoginView: Role changed detected. Updating App state. Role: \(validRole.rawValue)")
-            }
-        }
+        // Keep AppState injection
+        .environmentObject(appState)
     }
 }
 
-// --- Preview Provider ---
+// Preview requires AppState
 struct LoginView_Previews: PreviewProvider {
     static var previews: some View {
-        // **** UPDATE PREVIEW CALL SITE ****
-        LoginView(isLoggedIn: .constant(false), userRole: .constant(nil)) // Use userRole here too
+        LoginView()
+            .environmentObject(AppState())
     }
 }
