@@ -1,10 +1,11 @@
 // HealthSyncAI-mobile-project/ViewModels/ChatViewModel.swift
-// UPDATED FILE
+// UPDATED FILE incorporating Combine listener for BookingViewModel state
+
 import Foundation
 import Combine
-import SwiftUI // For Color
+import SwiftUI // For Color and Date
 
-@MainActor
+@MainActor // Ensure UI updates happen on the main thread
 class ChatViewModel: ObservableObject {
 
     // --- UI State ---
@@ -31,11 +32,17 @@ class ChatViewModel: ObservableObject {
     // We create BookingViewModel when scheduling starts
     @Published var bookingViewModel: BookingViewModel? = nil
 
+    // --- Booking Confirmation State (Managed by Combine) ---
+    @Published var canConfirmBooking: Bool = false // <<< Now @Published, updated by listener
+
     // --- Dependencies ---
     @Published var userFirstName: String = "" // Display name
     private let networkManager = NetworkManager.shared
     private let appState: AppState // Needs AppState for auth status/logout
-    private let keychainHelper = KeychainHelper.standard // Add KeychainHelper instance
+    private let keychainHelper = KeychainHelper.standard
+
+    // --- Combine Subscription ---
+    private var bookingStateCancellable: AnyCancellable? // <<< Stores the subscription
 
     // Keep track of the room number for the *current* active chat session
     private var activeChatRoomNumber: Int? = nil
@@ -43,7 +50,7 @@ class ChatViewModel: ObservableObject {
     // --- Initialization ---
     init(appState: AppState) {
         self.appState = appState
-        self.userFirstName = keychainHelper.getFirstName() ?? "there" // Use KeychainHelper instance
+        self.userFirstName = keychainHelper.getFirstName() ?? "there"
         fetchHistory() // Fetch history on init
     }
 
@@ -62,13 +69,12 @@ class ChatViewModel: ObservableObject {
                 [
                     DisplayMessage(sender: .user, text: chatMsg.inputText),
                     DisplayMessage(sender: .bot, text: chatMsg.modelResponse)
-                    // Optionally display historical triage advice here if needed
                 ]
             }
     }
 
     var canSendMessage: Bool {
-        !currentInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isLoadingResponse && !isConfirmingAppointment
+        !currentInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isLoadingResponse && !isConfirmingAppointment && !showSchedulingUI
     }
 
     var canStartNewChat: Bool {
@@ -83,23 +89,21 @@ class ChatViewModel: ObservableObject {
         lastTriageAdvice == "schedule_appointment" && !showSchedulingUI && selectedSection == .chatbot
     }
 
-    var canConfirmBooking: Bool {
-        bookingViewModel?.selectedDoctor != nil &&
-        bookingViewModel?.selectedTimeSlot != nil &&
-        !isConfirmingAppointment
-    }
+    // Note: 'canConfirmBooking' is now a @Published var updated by the listener
 
     // --- Actions ---
 
     func selectSection(_ section: ChatSection) {
         selectedSection = section
         if section == .history && selectedHistoryRoomId == nil {
-            // Auto-select the most recent history room if none is selected
-            selectedHistoryRoomId = chatHistory.first?.roomNumber // History is reversed (newest first)
+            selectedHistoryRoomId = chatHistory.first?.roomNumber
         }
-        // Clear transient states when switching sections
         lastTriageAdvice = nil
         errorMessage = nil
+        // If switching away from chatbot while scheduling UI is open, close it
+        if section != .chatbot && showSchedulingUI {
+             toggleScheduling(show: false) // Close booking if switching section
+        }
     }
 
     func fetchHistory() {
@@ -111,24 +115,20 @@ class ChatViewModel: ObservableObject {
         Task {
             do {
                 let history = try await networkManager.fetchChatHistory()
-                // Sort rooms by highest room number first (most recent)
                 self.chatHistory = history.sorted { $0.roomNumber > $1.roomNumber }
 
-                // Determine the next available room number
                 if let highestRoomNum = self.chatHistory.first?.roomNumber {
                     self.currentRoomNumber = highestRoomNum + 1
                 } else {
-                    self.currentRoomNumber = 1 // Start at 1 if no history
+                    self.currentRoomNumber = 1
                 }
                 print("✅ Fetched \(self.chatHistory.count) chat rooms. Next room number: \(self.currentRoomNumber ?? 0)")
 
-                // If history section is active and no room selected, select the newest one
                 if self.selectedSection == .history && self.selectedHistoryRoomId == nil {
                     self.selectedHistoryRoomId = self.chatHistory.first?.roomNumber
                 }
 
             } catch let error as NetworkError {
-                // --- UPDATED: Check error case, not direct equality ---
                 if case .unauthorized = error {
                     handleUnauthorized()
                 } else {
@@ -147,57 +147,43 @@ class ChatViewModel: ObservableObject {
         guard canSendMessage else { return }
 
         let messageText = currentInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        currentInput = "" // Clear input immediately
+        currentInput = ""
 
-        // Add user message to UI
         currentMessages.append(DisplayMessage(sender: .user, text: messageText))
         isLoadingResponse = true
         errorMessage = nil
-        lastTriageAdvice = nil // Clear previous advice
+        lastTriageAdvice = nil
 
-        // If this is the first message of a new chat, use currentRoomNumber
         if activeChatRoomNumber == nil {
             activeChatRoomNumber = currentRoomNumber
         }
 
         print("Sending message: '\(messageText)' to room: \(activeChatRoomNumber ?? -1)")
-
         let requestBody = ChatSymptomRequest(symptomText: messageText, roomNumber: activeChatRoomNumber)
 
         Task {
             do {
                 let response = try await networkManager.sendChatMessage(message: requestBody)
-
-                // Add bot response to UI
                 currentMessages.append(DisplayMessage(sender: .bot, text: response.analysis ?? "Sorry, I couldn't process that."))
 
-                // Store triage advice
                 if let advice = response.triageAdvice, !advice.isEmpty {
                     self.lastTriageAdvice = advice
                     print("ℹ️ Received triage advice: \(advice)")
                 }
 
-                // If this was the first message and successful, increment for the *next* potential chat
+                // Handle room number increment and history refresh
                 if requestBody.roomNumber == currentRoomNumber {
-                     // Refetch history to include the new room if it wasn't there before
-                     // This ensures the history dropdown/list updates correctly.
                      let roomExisted = chatHistory.contains { $0.roomNumber == currentRoomNumber }
                      if !roomExisted {
-                         fetchHistory() // Fetch again to get the new room listed
-                     } else {
-                         // If the room already existed (e.g., user revisited an old chat),
-                         // we might still want to update the specific room's messages in chatHistory.
-                         // This requires finding the room and updating its 'chats' array.
-                         // For simplicity now, we only refetch if it's a *brand new* room number.
+                         // Refetch history to include the new room in the list.
+                         // This is simpler than manually inserting.
+                         fetchHistory()
                      }
-                     // Increment for the *next* chat only after the first message of the current one succeeds
+                     // Increment only after the *first* successful message of a new chat session
                      currentRoomNumber = (currentRoomNumber ?? 0) + 1
-
                  }
 
-
             } catch let error as NetworkError {
-                 // --- UPDATED: Check error case, not direct equality ---
                  if case .unauthorized = error {
                     handleUnauthorized()
                 } else {
@@ -218,78 +204,139 @@ class ChatViewModel: ObservableObject {
         guard canStartNewChat else { return }
         print("Starting new chat...")
 
-        // Reset chat-specific state
         currentMessages = [DisplayMessage(sender: .bot, text: "Hello, how can I help you?")]
         currentInput = ""
         isLoadingResponse = false
         lastTriageAdvice = nil
         errorMessage = nil
-        activeChatRoomNumber = nil // Ensures the next message uses currentRoomNumber
+        activeChatRoomNumber = nil
 
-        // Reset scheduling state
-        showSchedulingUI = false
-        bookingViewModel = nil
-        isConfirmingAppointment = false
+        // Cancel listener and reset booking state if user starts a new chat
+        toggleScheduling(show: false) // This also handles cancelling the listener
 
-        // Switch view back to chatbot
         selectedSection = .chatbot
-        selectedHistoryRoomId = nil // Deselect history room
+        selectedHistoryRoomId = nil
     }
 
+    // --- UPDATED: Includes listener setup/cancellation ---
     func toggleScheduling(show: Bool) {
         print("Toggling scheduling UI: \(show)")
         if show {
+            // Ensure we are in the chatbot section
+            guard selectedSection == .chatbot else {
+                print("⚠️ Cannot open scheduling UI from outside chatbot section.")
+                return
+            }
             // Create BookingViewModel only when needed
-            bookingViewModel = BookingViewModel()
+            if bookingViewModel == nil {
+                bookingViewModel = BookingViewModel()
+                setupBookingViewModelListener() // <<< Start listening when VM is created
+            }
         } else {
+            bookingStateCancellable?.cancel() // <<< Stop listening
             bookingViewModel = nil // Release the booking view model
+            canConfirmBooking = false // <<< Reset confirmation state explicitly
+            isConfirmingAppointment = false // Reset confirmation spinner state
         }
+        // Update the UI visibility state *after* setting up/tearing down
         showSchedulingUI = show
     }
 
+    // --- NEW: Listener Setup ---
+    private func setupBookingViewModelListener() {
+        // Ensure we have a VM to listen to
+        guard let bookingVM = bookingViewModel else {
+            print("❌ Cannot setup listener: BookingViewModel is nil.")
+            canConfirmBooking = false // Cannot confirm if no VM exists
+            return
+        }
+
+        print("🎧 Setting up listener for BookingViewModel state changes...")
+
+        // Cancel any previous subscription to avoid leaks or duplicate updates
+        bookingStateCancellable?.cancel()
+
+        // Create the pipeline to observe relevant properties in BookingViewModel
+        bookingStateCancellable = bookingVM.$selectedDate // Listen to date
+            .combineLatest(bookingVM.$selectedTimeSlot, bookingVM.$selectedDoctor, bookingVM.$isBooking) // Listen to time, doctor, and booking status
+            .map { date, timeSlot, doctor, isBookingInProgress -> Bool in
+                // Logic: Can confirm only if a date, timeslot, AND doctor are selected, AND not currently booking
+                let canBook = timeSlot != nil && doctor != nil && !isBookingInProgress
+                print("⚙️ Combine Check: Date=\(date), Time=\(String(describing: timeSlot)), Doctor=\(String(describing: doctor?.id)), IsBooking=\(isBookingInProgress) -> CanConfirm: \(canBook)") // Debugging
+                return canBook
+            }
+            .receive(on: DispatchQueue.main) // Ensure the update happens on the main thread
+            .assign(to: \.canConfirmBooking, on: self) // Assign the result directly to canConfirmBooking
+    }
+    // --- End NEW Listener Setup ---
+
     func confirmAppointment() {
-         guard let bookingVM = bookingViewModel, let doctor = bookingVM.selectedDoctor, let times = bookingVM.getFormattedAppointmentTimes(), canConfirmBooking else {
-             errorMessage = "Please select a doctor, date, and time."
-             print("❌ Appointment confirmation validation failed.")
+         // Use the @Published canConfirmBooking which is updated by the listener
+         guard canConfirmBooking, let bookingVM = bookingViewModel else {
+             errorMessage = "Please ensure a doctor, date, and time slot are selected."
+             print("❌ [ChatVM] Appointment confirmation validation failed (canConfirmBooking=\(canConfirmBooking), bookingVM exists=\(bookingViewModel != nil)).")
+             return
+         }
+         // Now we are sure bookingVM is non-nil because canConfirmBooking depends on it
+         guard let doctor = bookingVM.selectedDoctor,
+               let times = bookingVM.getFormattedAppointmentTimes() else {
+             errorMessage = "Internal error: Missing booking details."
+             print("❌ [ChatVM] Appointment confirmation failed: Missing doctor or formatted times despite canConfirmBooking being true.")
              return
          }
 
-         print("Confirming appointment for Dr. \(doctor.lastName) at \(times.0)")
-         isConfirmingAppointment = true
+         // Check if already confirming (ChatViewModel still manages this temporary UI state)
+         guard !isConfirmingAppointment else { return }
+
+         print("▶️ [ChatVM] Initiating appointment confirmation...")
+         isConfirmingAppointment = true // Show spinner in ChatView
          errorMessage = nil
 
          let requestData = CreateAppointmentRequest(
              doctorId: doctor.id,
              startTime: times.0,
              endTime: times.1,
-             // Replace with actual URL logic if needed, or get from backend post-creation
-             telemedicineUrl: "https://example.com/meeting/\(UUID().uuidString.prefix(8))"
+             telemedicineUrl: "https://example.com/meeting/\(UUID().uuidString.prefix(8))" // Adjust as needed
          )
 
          Task {
+            var bookingSuccess = false
              do {
-                 let createdAppointment = try await networkManager.createAppointment(requestData: requestData)
-                 print("✅ Appointment created successfully! ID: \(createdAppointment.id)")
-
-                 // --- Success: Reset state ---
-                 self.showSchedulingUI = false
-                 self.bookingViewModel = nil // Clear booking VM
-                 self.lastTriageAdvice = nil // Clear the prompt
-                 // Optionally show a success message to the user
+                 // --- CALL BookingViewModel's performBooking ---
+                 let createdAppointment = try await bookingVM.performBooking(requestData: requestData)
+                 // --------------------------------------------
+                 print("✅ [ChatVM] Appointment creation delegated successfully! ID: \(createdAppointment.id)")
+                 bookingSuccess = true
 
              } catch let error as NetworkError {
-                 // --- UPDATED: Check error case, not direct equality ---
                  if case .unauthorized = error {
                      handleUnauthorized()
                  } else {
                      errorMessage = "Failed to book appointment: \(error.localizedDescription)"
-                     print("❌ NetworkError creating appointment: \(error)")
+                     print("❌ [ChatVM] NetworkError during booking delegation: \(error)")
                  }
              } catch {
-                 errorMessage = "An unexpected error occurred: \(error.localizedDescription)"
-                 print("❌ Unexpected error creating appointment: \(error)")
+                 errorMessage = "An unexpected error occurred during booking: \(error.localizedDescription)"
+                 print("❌ [ChatVM] Unexpected error during booking delegation: \(error)")
              }
-             isConfirmingAppointment = false
+
+             // --- Reset state (ChatViewModel's responsibility for UI flow) ---
+             // Check if task was cancelled or if logout occurred
+             if !Task.isCancelled && !(errorMessage?.contains("session has expired") ?? false) {
+                 self.isConfirmingAppointment = false // Hide ChatView spinner
+
+                 if bookingSuccess {
+                     // Success: Hide booking UI & clear related state in ChatViewModel
+                     self.toggleScheduling(show: false)
+                     self.lastTriageAdvice = nil // Clear the schedule prompt
+                     // Consider showing a confirmation message/alert here
+                     print("🎉 [ChatVM] Booking flow completed successfully.")
+                 } else {
+                     // Failure: Keep booking UI open so user can retry or change details
+                     // Error message should already be set
+                     print("⚠️ [ChatVM] Booking flow failed. Booking UI remains open.")
+                 }
+             }
          }
      }
 
@@ -297,7 +344,9 @@ class ChatViewModel: ObservableObject {
     private func handleUnauthorized() {
         print("⚠️ Unauthorized access detected in ChatViewModel. Logging out.")
         errorMessage = "Your session has expired. Please log in again."
+        bookingStateCancellable?.cancel() // Cancel listener on logout
         appState.logout()
+        // Resetting states like showSchedulingUI happens implicitly via AppState change or could be done here if needed
     }
 }
 
@@ -314,7 +363,7 @@ extension KeychainHelper {
     // during login/registration if available.
     func getFirstName() -> String? {
         // Use the *internal* account name defined in KeychainHelper
-        return self.readData(service: KeychainHelper.authService, account: KeychainHelper.usernameAccount) // Use static properties
+        return self.readData(service: KeychainHelper.authService, account: KeychainHelper.usernameAccount)
                .flatMap { String(data: $0, encoding: .utf8) }
     }
 }

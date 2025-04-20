@@ -1,8 +1,7 @@
 // HealthSyncAI-mobile-project/ViewModels/BookingViewModel.swift
-// NEW FILE (within a ViewModels/Chat subfolder if desired)
 import Foundation
 import Combine
-import SwiftUI // For Date
+import SwiftUI
 
 @MainActor
 class BookingViewModel: ObservableObject {
@@ -14,6 +13,8 @@ class BookingViewModel: ObservableObject {
     @Published var isLoadingDoctors: Bool = false
     @Published var doctorError: String? = nil
 
+    @Published var isBooking: Bool = false // Tracks if the booking network call is active
+
     // Hardcoded time slots as in the React component
     let availableTimeSlots = [
         "10:30 AM", "11:30 AM", "02:30 PM", "03:00 PM",
@@ -21,6 +22,7 @@ class BookingViewModel: ObservableObject {
     ]
 
     private let networkManager = NetworkManager.shared
+    private var cancellables = Set<AnyCancellable>() // If using Combine internally
 
     init() {
         fetchDoctors()
@@ -38,13 +40,13 @@ class BookingViewModel: ObservableObject {
                 if let firstDoctor = fetchedDoctors.first {
                     self.selectedDoctor = firstDoctor
                 }
-                print("✅ Fetched \(fetchedDoctors.count) doctors.")
+                 print("✅ [BookingVM] Fetched \(fetchedDoctors.count) doctors.")
             } catch let error as NetworkError {
                 doctorError = "Failed to load doctors: \(error.localizedDescription)"
-                print("❌ NetworkError fetching doctors: \(error)")
+                 print("❌ [BookingVM] NetworkError fetching doctors: \(error)")
             } catch {
                 doctorError = "An unexpected error occurred: \(error.localizedDescription)"
-                print("❌ Unexpected error fetching doctors: \(error)")
+                 print("❌ [BookingVM] Unexpected error fetching doctors: \(error)")
             }
             isLoadingDoctors = false
         }
@@ -62,51 +64,59 @@ class BookingViewModel: ObservableObject {
     // Returns (isoStartTime, isoEndTime) or nil if invalid selection
     func getFormattedAppointmentTimes() -> (String, String)? {
         guard let timeSlot = selectedTimeSlot else {
-            print("❌ Cannot format time: Time slot not selected.")
+             print("❌ [BookingVM] Cannot format time: Time slot not selected.")
             return nil
         }
 
-        // 1. Combine selectedDate (day, month, year) with timeSlot (hour, minute, am/pm)
         let calendar = Calendar.current
         let dateComponents = calendar.dateComponents([.year, .month, .day], from: selectedDate)
-
-        // 2. Parse the timeSlot string
         let timeFormatter = DateFormatter()
-        timeFormatter.dateFormat = "hh:mm a" // e.g., "10:30 AM"
+        timeFormatter.dateFormat = "hh:mm a"
         guard let timeDate = timeFormatter.date(from: timeSlot) else {
-            print("❌ Cannot format time: Failed to parse time slot '\(timeSlot)'")
+             print("❌ [BookingVM] Cannot format time: Failed to parse time slot '\(timeSlot)'")
             return nil
         }
         let timeComponents = calendar.dateComponents([.hour, .minute], from: timeDate)
-
-        // 3. Create the final start time Date object
         var combinedComponents = DateComponents()
         combinedComponents.year = dateComponents.year
         combinedComponents.month = dateComponents.month
         combinedComponents.day = dateComponents.day
         combinedComponents.hour = timeComponents.hour
         combinedComponents.minute = timeComponents.minute
-        // Use current timeZone temporarily, ISO8601Encoder will handle UTC conversion
-        combinedComponents.timeZone = TimeZone.current
-
+        combinedComponents.timeZone = TimeZone.current // ISO formatter handles UTC conversion
         guard let startTime = calendar.date(from: combinedComponents) else {
-            print("❌ Cannot format time: Failed to create start date from components.")
+             print("❌ [BookingVM] Cannot format time: Failed to create start date from components.")
             return nil
         }
-
-        // 4. Calculate end time (assuming 1-hour duration like React code)
-        guard let endTime = calendar.date(byAdding: .hour, value: 1, to: startTime) else {
-            print("❌ Cannot format time: Failed to calculate end time.")
+        guard let endTime = calendar.date(byAdding: .hour, value: 1, to: startTime) else { // Assuming 1 hour duration
+             print("❌ [BookingVM] Cannot format time: Failed to calculate end time.")
             return nil
         }
-
-        // 5. Format as ISO 8601 strings (UTC is standard)
         let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds] // Include fractional seconds if needed by backend
-
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let startTimeString = isoFormatter.string(from: startTime)
         let endTimeString = isoFormatter.string(from: endTime)
-
         return (startTimeString, endTimeString)
     }
+
+    // --- ADDED: Method to perform the booking network call ---
+    // This method should be called BY ChatViewModel
+    func performBooking(requestData: CreateAppointmentRequest) async throws -> Appointment {
+        // Set booking state to true BEFORE the network call
+        isBooking = true
+        // Ensure isBooking is set back to false when the function exits,
+        // whether it succeeds or throws an error.
+        defer {
+             print("🔄 [BookingVM] Setting isBooking back to false (defer).")
+             isBooking = false
+        }
+
+        print("⏳ [BookingVM] Attempting to create appointment...")
+        // The actual network call - let it throw errors upwards
+        let createdAppointment = try await networkManager.createAppointment(requestData: requestData)
+        print("✅ [BookingVM] Appointment created successfully! ID: \(createdAppointment.id)")
+        return createdAppointment
+    }
+    // --- End ADDED Method ---
+
 }

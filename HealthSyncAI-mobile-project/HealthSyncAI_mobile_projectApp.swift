@@ -18,28 +18,24 @@ struct HealthSyncAI_mobile_projectApp: App {
                         // Records Tab
                         NavigationView {
                             PatientRecordsView(patientId: appState.userId ?? 0)
-                                // No need for .navigationTitle here, PatientRecordsView sets it
-                                // No need for logout button here, move to a Settings/Profile tab
                         }
                         .tabItem { Label("Records", systemImage: "list.bullet.clipboard.fill") }
-                        .environmentObject(appState) // Pass state down
+                        .environmentObject(appState)
 
                         // Chat Tab
-                        NavigationView { // Embed ChatView for its own title/potential navigation
+                        NavigationView {
                             ChatView(appState: appState)
-                                // ChatView sets its own title ("Online Consult")
                         }
                         .tabItem { Label("Chat", systemImage: "message.fill") }
-                        // No need for .environmentObject(appState) here, ChatView init receives it
+                        // No need for separate .environmentObject here, ChatView init receives it
 
-                        // Appointments Tab (Placeholder - Add PatientAppointmentsView if created)
+                        // Appointments Tab
                         NavigationView {
-                            // Replace with your actual Patient Appointments View when ready
-                             Text("Patient Appointments View (Placeholder)")
-                                .navigationTitle("Appointments")
+                            // Use the actual Patient Appointments View
+                            MyAppointmentsView() // <<< Displays the list of patient's appointments
                         }
                          .tabItem { Label("Appointments", systemImage: "calendar") }
-                         .environmentObject(appState)
+                         .environmentObject(appState) // Pass state down if needed by view/viewmodel
 
 
                         // Settings/Logout Tab
@@ -65,7 +61,7 @@ struct HealthSyncAI_mobile_projectApp: App {
                 case .doctor:
                     // Doctor view remains the same for now
                     DoctorAppointmentsView()
-                        .environmentObject(appState) // Inject AppState for logout
+                        .environmentObject(appState)
                         .onAppear { print("App Body: Showing Doctor View (User ID: \(appState.userId ?? 0))") }
 
                 case .none:
@@ -81,7 +77,7 @@ struct HealthSyncAI_mobile_projectApp: App {
             } else {
                 // Show LoginView, passing AppState
                 LoginView()
-                     .environmentObject(appState) // Inject AppState
+                     .environmentObject(appState)
                     .onAppear{ print("App Body: Showing Login View") }
             }
         }

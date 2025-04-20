@@ -293,11 +293,19 @@ class NetworkManager {
         return try await request(endpoint: endpoint, method: "GET", requiresAuth: true) // Uses request (no strategy), Doctor has CodingKeys
     }
     func createAppointment(requestData: CreateAppointmentRequest) async throws -> Appointment {
-         let endpoint = "/api/appointment"
-         let encoder = JSONEncoder(); encoder.keyEncodingStrategy = .convertToSnakeCase
-         let body = try encoder.encode(requestData)
-         return try await request(endpoint: endpoint, method: "POST", body: body, requiresAuth: true) // Uses request (no strategy), Appointment has CodingKeys
-     }
+             // --- FIX: Add trailing slash to match the URL the server expects ---
+             // The server was redirecting from /api/appointment to /api/appointment/,
+             // and the redirected request was losing the Auth header.
+             // Sending directly to the correct URL avoids the redirect.
+             let endpoint = "/api/appointment/"
+             // -------------------------------------------------------------------
+
+             let encoder = JSONEncoder(); encoder.keyEncodingStrategy = .convertToSnakeCase
+             let body = try encoder.encode(requestData)
+             // Uses the generic 'request' function which handles adding the auth header
+             return try await request(endpoint: endpoint, method: "POST", body: body, requiresAuth: true)
+         }
+
     // HEALTH RECORDS
     func fetchPatientHealthRecords(patientId: Int) async throws -> [HealthRecord] {
         let endpoint = "/api/health-record/patient/\(patientId)"
@@ -320,6 +328,24 @@ class NetworkManager {
          let body = try encoder.encode(message)
          return try await request(endpoint: endpoint, method: "POST", body: body, requiresAuth: true) // Uses request (no strategy), ChatSymptomResponse has CodingKeys
      }
+    // --- NEW FUNCTION ---
+        func fetchPatientAppointments() async throws -> [Appointment] {
+            // Endpoint specifically for the logged-in user's appointments
+            // Ensure this matches the endpoint your backend uses for fetching
+            // appointments based on the provided JWT token (usually the same
+            // endpoint as fetching doctor appointments if the backend logic differentiates based on token/role)
+            let endpoint = "/api/appointment/my-appointments"
+
+            // Uses the generic 'request' function which adds the auth header
+            // Assuming the response is an array of Appointment objects
+            print("ℹ️ NetworkManager: Fetching appointments for logged-in user (Patient perspective) from \(endpoint)")
+            return try await request(
+                endpoint: endpoint,
+                method: "GET",
+                requiresAuth: true // This endpoint requires authentication
+            )
+        }
+        // --- END NEW FUNCTION ---
 }
 
 // Define an empty response type for API calls that return 2xx but no body
