@@ -14,12 +14,17 @@ struct HealthSyncAI_mobile_projectApp: App {
                 switch appState.userRole {
                 case .patient:
                     // --- Use TabView for Patient ---
-                    TabView {
+                    TabView { // <<< START TabView
                         // Records Tab
                         NavigationView {
                             PatientRecordsView(patientId: appState.userId ?? 0)
                         }
-                        .tabItem { Label("Records", systemImage: "list.bullet.clipboard.fill") }
+                        .tabItem {
+                            Label(
+                                "Records",
+                                systemImage: "list.bullet.clipboard.fill"
+                            )
+                        }
                         .environmentObject(appState)
 
                         // Chat Tab
@@ -32,37 +37,45 @@ struct HealthSyncAI_mobile_projectApp: App {
                         // Appointments Tab
                         NavigationView {
                             // Use the actual Patient Appointments View
-                            MyAppointmentsView() // <<< Displays the list of patient's appointments
+                            MyAppointmentsView()
                         }
-                         .tabItem { Label("Appointments", systemImage: "calendar") }
-                         .environmentObject(appState) // Pass state down if needed by view/viewmodel
+                        .tabItem {
+                            Label("Appointments", systemImage: "calendar")
+                        }
+                        .environmentObject(appState)
 
-
-                        // Settings/Logout Tab
+                        // --- UPDATED: Dashboard Tab ---
                         NavigationView {
-                             VStack(spacing: 20) {
-                                 Text("User ID: \(appState.userId ?? 0)")
-                                 Text("Role: \(appState.userRole?.rawValue ?? "Unknown")")
-                                 Spacer()
-                                 Button("Logout") { appState.logout() }
-                                     .buttonStyle(.borderedProminent)
-                                     .tint(.red)
-                                 Spacer()
-                             }
-                            .navigationTitle("Settings")
+                            // Use the new DashboardView
+                            DashboardView()
                         }
-                         .tabItem { Label("Settings", systemImage: "gear") }
-                         .environmentObject(appState)
+                        .tabItem { // <<< START .tabItem closure
+                            Label(
+                                "Dashboard",
+                                systemImage: "square.grid.2x2.fill" // Or "chart.pie.fill"
+                            )
+                            // --- REMOVE EXTRA BRACE HERE ---
+                        } // <<< END .tabItem closure
+                        .environmentObject(appState) // Apply environment object after .tabItem
 
+                        // --- REMOVE EXTRA BRACE HERE ---
+
+                    } // <<< END TabView
+                    .onAppear {
+                        print(
+                            "App Body: Showing Patient TabView (User ID: \(appState.userId ?? 0))"
+                        )
                     }
-                    .onAppear { print("App Body: Showing Patient TabView (User ID: \(appState.userId ?? 0))") }
-
 
                 case .doctor:
                     // Doctor view remains the same for now
                     DoctorAppointmentsView()
                         .environmentObject(appState)
-                        .onAppear { print("App Body: Showing Doctor View (User ID: \(appState.userId ?? 0))") }
+                        .onAppear {
+                            print(
+                                "App Body: Showing Doctor View (User ID: \(appState.userId ?? 0))"
+                            )
+                        }
 
                 case .none:
                     // Fallback if logged in but role is somehow nil
@@ -71,14 +84,18 @@ struct HealthSyncAI_mobile_projectApp: App {
                         Button("Logout") { appState.logout() }
                             .padding()
                     }
-                    .onAppear { print("App Body: Error - Role is nil despite being logged in.") }
+                    .onAppear {
+                        print(
+                            "App Body: Error - Role is nil despite being logged in."
+                        )
+                    }
                 }
 
             } else {
                 // Show LoginView, passing AppState
                 LoginView()
-                     .environmentObject(appState)
-                    .onAppear{ print("App Body: Showing Login View") }
+                    .environmentObject(appState)
+                    .onAppear { print("App Body: Showing Login View") }
             }
         }
     }

@@ -44,3 +44,23 @@ class AppState: ObservableObject {
         self.userId = nil
     }
 }
+
+#if DEBUG // Only compile this helper for Debug builds (used by Previews)
+extension AppState {
+    /// Creates a pre-configured AppState instance suitable for SwiftUI Previews.
+    /// - Parameter role: The desired UserRole for the preview state.
+    /// - Returns: An AppState object configured for the specified role.
+    static func previewAppState(role: UserRole) -> AppState {
+        let state = AppState()
+        state.isLoggedIn = true // Assume logged in for most previews needing roles
+        state.userRole = role
+        // Assign some consistent dummy IDs based on role for predictability
+        state.userId = (role == .doctor) ? 999 : 111
+        // Note: This doesn't interact with Keychain. If previewed ViewModels
+        // rely heavily on Keychain data fetched via AppState on init,
+        // you might need more sophisticated preview setup or mocking.
+        return state
+    }
+}
+#endif
+// --- END EXTENSION ---

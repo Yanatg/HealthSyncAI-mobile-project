@@ -346,6 +346,18 @@ class NetworkManager {
             )
         }
         // --- END NEW FUNCTION ---
+    // --- STATISTICS ---
+        func fetchStatistics() async throws -> StatisticsData {
+            // Ensure endpoint includes trailing slash if required by your backend
+            let endpoint = "/api/statistics/"
+            print("ℹ️ NetworkManager: Fetching statistics from \(endpoint)")
+            // Use the generic request function, assuming auth is required
+            return try await request(
+                endpoint: endpoint,
+                method: "GET",
+                requiresAuth: true // Statistics likely require login
+            )
+        }
 }
 
 // Define an empty response type for API calls that return 2xx but no body
