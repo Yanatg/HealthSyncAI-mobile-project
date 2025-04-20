@@ -1,27 +1,31 @@
 // HealthSyncAI-mobile-project/Models/Appointment.swift
+// UPDATED FILE
 import Foundation
 import SwiftUI // Needed for Color
 
 struct Appointment: Codable, Identifiable {
     let id: Int
-    let patientId: Int
-    let doctorId: Int
+    let patientId: Int // Keep Swift property as camelCase
+    let doctorId: Int  // Keep Swift property as camelCase
     let startTime: String // Keep as ISO string for decoding
     let endTime: String   // Keep as ISO string for decoding
     let status: String // "scheduled", "completed", "cancelled", "no_show" etc.
     let telemedicineUrl: String? // This should be optional
 
+    // --- UPDATED CodingKeys ---
+    // Explicitly map the snake_case JSON keys to your camelCase Swift properties
     enum CodingKeys: String, CodingKey {
-            case id // Matches JSON key
-            case patientId // Strategy handles patient_id -> patientId
-            case doctorId  // Strategy handles doctor_id -> doctorId
-            case startTime // Strategy handles start_time -> startTime
-            case endTime   // Strategy handles end_time -> endTime
-            case status    // Matches JSON key
-            case telemedicineUrl // Strategy handles telemedicine_url -> telemedicineUrl
-        }
+        case id               // JSON 'id' maps to Swift 'id'
+        case patientId = "patient_id" // JSON 'patient_id' maps to Swift 'patientId'
+        case doctorId = "doctor_id"   // JSON 'doctor_id' maps to Swift 'doctorId'
+        case startTime = "start_time" // JSON 'start_time' maps to Swift 'startTime'
+        case endTime = "end_time"     // JSON 'end_time' maps to Swift 'endTime'
+        case status                   // JSON 'status' maps to Swift 'status'
+        case telemedicineUrl = "telemedicine_url" // JSON 'telemedicine_url' maps to Swift 'telemedicineUrl'
+    }
+    // --- END UPDATE ---
 
-    // --- Computed Properties (Replaced lazy var) ---
+    // --- Computed Properties (No change needed here) ---
 
     // Calculate the start Date object when needed
     var startDate: Date? {
@@ -33,7 +37,7 @@ struct Appointment: Codable, Identifiable {
         parseISO8601String(endTime)
     }
 
-    // --- Display Formatting Helpers ---
+    // --- Display Formatting Helpers (No change needed here) ---
 
     var displayDate: String {
         guard let date = startDate else { return "Invalid Date" } // Use the computed property
@@ -81,6 +85,7 @@ struct Appointment: Codable, Identifiable {
     }
 }
 
+// CreateAppointmentRequest remains the same
 struct CreateAppointmentRequest: Codable {
     let doctorId: Int
     let startTime: String // ISO 8601 format string
@@ -95,7 +100,7 @@ struct CreateAppointmentRequest: Codable {
     }
 }
 
-// Extend DateFormatter for reusable instances (remains the same)
+// DateFormatter extension remains the same
 extension DateFormatter {
     static let displayDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -111,4 +116,3 @@ extension DateFormatter {
         return formatter
     }()
 }
-

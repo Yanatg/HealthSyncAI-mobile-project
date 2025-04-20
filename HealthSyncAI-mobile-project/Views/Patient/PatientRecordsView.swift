@@ -6,9 +6,11 @@ struct PatientRecordsView: View {
     // Use @StateObject if the view creates the VM, @ObservedObject if passed in
     @StateObject private var viewModel: PatientRecordsViewModel
 
-    // State to control sheet presentation for creating new note
-    // REMOVED: @State private var showingCreateNoteSheet = false
-    // Patients viewing their own records cannot create notes directly here.
+    // --- ADDED: Access AppState to check user role ---
+    @EnvironmentObject private var appState: AppState
+
+    // --- ADDED: State to control sheet presentation ---
+    @State private var showingCreateNoteSheet = false
 
     // Initialize with patientId
     init(patientId: Int) {
@@ -21,9 +23,21 @@ struct PatientRecordsView: View {
                 ProgressView("Loading Records...")
                     .padding()
             } else if let error = viewModel.errorMessage {
-                Text("Error: \(error)")
-                    .foregroundColor(.red)
-                    .padding()
+                VStack { // Wrap error message for better layout
+                    Text("Error Loading Records")
+                        .font(.headline)
+                        .padding(.bottom, 2)
+                    Text(error)
+                        .foregroundColor(.red)
+                        .font(.caption)
+                        .multilineTextAlignment(.center)
+                    Button("Retry") {
+                        viewModel.fetchRecords()
+                    }
+                    .buttonStyle(.bordered)
+                    .padding(.top)
+                }
+                .padding()
             } else if viewModel.healthRecords.isEmpty {
                 Text("No health records found for this patient.")
                     .foregroundColor(.secondary)
@@ -35,40 +49,52 @@ struct PatientRecordsView: View {
                     }
                 }
                 .listStyle(.plain)
+                // --- ADDED: Refreshable ---
+                .refreshable {
+                    viewModel.fetchRecords()
+                }
             }
         }
         .navigationTitle("Patient #\(viewModel.patientId) Records")
         .navigationBarTitleDisplayMode(.inline)
-        // --- REMOVED Toolbar Item for "New Note" ---
-        // .toolbar {
-        //     ToolbarItem(placement: .navigationBarTrailing) {
-        //         Button {
-        //             showingCreateNoteSheet = true
-        //         } label: {
-        //             Image(systemName: "plus.circle.fill")
-        //             Text("New Note")
-        //         }
-        //         .disabled(viewModel.isLoading) // Disable while loading initial records
-        //     }
-        // }
-        // --- REMOVED Sheet presentation ---
-        // .sheet(isPresented: $showingCreateNoteSheet) {
-        //     // Present the CreateDoctorNoteView as a sheet
-        //     NavigationView { // Embed in NavigationView for title/buttons inside sheet
-        //          CreateDoctorNoteView(patientId: viewModel.patientId) { success in
-        //              // This closure is called when the sheet is dismissed by the child view
-        //              showingCreateNoteSheet = false
-        //              if success {
-        //                  viewModel.fetchRecords() // Refresh records if save was successful
-        //              }
-        //          }
-        //     }
-        // }
+        // --- UPDATED: Conditional Toolbar Item for "New Note" ---
+        .toolbar {
+            // Only show the 'New Note' button if the logged-in user is a doctor
+            if appState.userRole == .doctor {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showingCreateNoteSheet = true
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                        Text("New Note")
+                    }
+                    .disabled(viewModel.isLoading) // Disable while loading initial records
+                }
+            }
+            // Add other toolbar items if needed (e.g., refresh, filter)
+        }
+        // --- ADDED: Sheet presentation for creating a new note ---
+        .sheet(isPresented: $showingCreateNoteSheet) {
+            // Present the CreateDoctorNoteView as a sheet
+            // Embed in NavigationView for title/buttons inside the sheet
+            NavigationView {
+                 CreateDoctorNoteView(patientId: viewModel.patientId) { success in
+                     // This closure is called when the sheet is dismissed by the child view
+                     showingCreateNoteSheet = false // Ensure sheet dismisses
+                     if success {
+                         // Refresh records if save was successful
+                         viewModel.fetchRecords()
+                     }
+                 }
+            }
+            // Prevent interactive dismissal if needed while saving, etc.
+            // .interactiveDismissDisabled(viewModel.isSaving) // Assuming viewModel has such a state
+        }
         // No .onAppear needed here as VM fetches on init
     }
 }
 
-// MARK: - Health Record Card View (Helper)
+// MARK: - Health Record Card View (Helper - No Changes Needed)
 struct HealthRecordCard: View {
     let record: HealthRecord
 
@@ -116,32 +142,40 @@ struct HealthRecordCard: View {
                 VStack(alignment: .leading, spacing: 10) {
                     if let symptoms = record.symptoms, !symptoms.isEmpty {
                         RecordDetailSection(title: "Symptoms", items: symptoms) { symptom in
-                            Text("\(symptom.name)\(symptom.severity.map { " (\($0)/10)" } ?? "")\(symptom.duration.map { " - \($0)" } ?? "")")
-                            if let desc = symptom.description, !desc.isEmpty {
-                                Text(desc).font(.caption).foregroundColor(.gray)
+                            VStack(alignment: .leading, spacing: 2) { // Wrap content for alignment
+                                Text("\(symptom.name)\(symptom.severity.map { " (\($0)/10)" } ?? "")\(symptom.duration.map { " - \($0)" } ?? "")")
+                                if let desc = symptom.description, !desc.isEmpty {
+                                    Text(desc).font(.caption).foregroundColor(.gray)
+                                }
                             }
                         }
                     }
                     if let diagnosis = record.diagnosis, !diagnosis.isEmpty {
                          RecordDetailSection(title: "Diagnosis", items: diagnosis) { diag in
-                             Text("\(diag.name)\(diag.icd10Code.map { " (\($0))" } ?? "")")
-                             if let desc = diag.description, !desc.isEmpty {
-                                 Text(desc).font(.caption).foregroundColor(.gray)
+                             VStack(alignment: .leading, spacing: 2) {
+                                 Text("\(diag.name)\(diag.icd10Code.map { " (\($0))" } ?? "")")
+                                 if let desc = diag.description, !desc.isEmpty {
+                                     Text(desc).font(.caption).foregroundColor(.gray)
+                                 }
                              }
                          }
                     }
                      if let plan = record.treatmentPlan, !plan.isEmpty {
                          RecordDetailSection(title: "Treatment Plan", items: plan) { p in
-                             Text(p.description)
-                             if let dur = p.duration, !dur.isEmpty { Text("Duration: \(dur)").font(.caption).foregroundColor(.gray) }
-                             if let fu = p.followUp, !fu.isEmpty { Text("Follow-up: \(fu)").font(.caption).foregroundColor(.gray) }
+                             VStack(alignment: .leading, spacing: 2) {
+                                 Text(p.description)
+                                 if let dur = p.duration, !dur.isEmpty { Text("Duration: \(dur)").font(.caption).foregroundColor(.gray) }
+                                 if let fu = p.followUp, !fu.isEmpty { Text("Follow-up: \(fu)").font(.caption).foregroundColor(.gray) }
+                            }
                          }
                     }
                      if let meds = record.medication, !meds.isEmpty {
                          RecordDetailSection(title: "Medication", items: meds) { med in
-                             Text("\(med.name) \(med.dosage), \(med.frequency)")
-                              if let dur = med.duration, !dur.isEmpty { Text("Duration: \(dur)").font(.caption).foregroundColor(.gray) }
-                             if let notes = med.notes, !notes.isEmpty { Text("Notes: \(notes)").font(.caption).foregroundColor(.gray) }
+                             VStack(alignment: .leading, spacing: 2) {
+                                 Text("\(med.name) \(med.dosage), \(med.frequency)")
+                                  if let dur = med.duration, !dur.isEmpty { Text("Duration: \(dur)").font(.caption).foregroundColor(.gray) }
+                                 if let notes = med.notes, !notes.isEmpty { Text("Notes: \(notes)").font(.caption).foregroundColor(.gray) }
+                            }
                          }
                     }
                     Spacer(minLength: 5)
@@ -153,6 +187,10 @@ struct HealthRecordCard: View {
                              .font(.caption2)
                              .foregroundColor(.gray)
                      }
+                     // Display Doctor ID
+                     Text("Doctor ID: \(record.doctorId)")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
                 }
                 .padding(.leading) // Indent details
             }
@@ -162,7 +200,7 @@ struct HealthRecordCard: View {
     }
 }
 
-// MARK: - Record Detail Section Helper
+// MARK: - Record Detail Section Helper (No Changes Needed)
 struct RecordDetailSection<Item: Identifiable, Content: View>: View {
     let title: String
     let items: [Item]
@@ -183,8 +221,28 @@ struct RecordDetailSection<Item: Identifiable, Content: View>: View {
 // MARK: - Preview
 struct PatientRecordsView_Previews: PreviewProvider {
     static var previews: some View {
+        // --- Preview as Doctor ---
         NavigationView {
             PatientRecordsView(patientId: 1) // Use a dummy ID for preview
+                .environmentObject(previewAppState(role: .doctor)) // Inject Doctor role
         }
+        .previewDisplayName("Doctor View")
+
+        // --- Preview as Patient ---
+        NavigationView {
+            PatientRecordsView(patientId: 2) // Use a dummy ID for preview
+                .environmentObject(previewAppState(role: .patient)) // Inject Patient role
+        }
+        .previewDisplayName("Patient View")
+    }
+
+    // Helper function to create AppState for previews
+    static func previewAppState(role: UserRole) -> AppState {
+        let state = AppState()
+        state.isLoggedIn = true
+        state.userRole = role
+        state.userId = (role == .doctor) ? 101 : 2 // Example user IDs
+        // Note: Previews don't interact with Keychain
+        return state
     }
 }
