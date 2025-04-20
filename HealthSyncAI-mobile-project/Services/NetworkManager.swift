@@ -14,25 +14,33 @@ extension Data {
 
 // Define potential network errors
 enum NetworkError: Error, LocalizedError {
-    case invalidURL  // Error 0
-    case requestFailed(Error)  // Error 1
-    case invalidResponse  // Error 2
-    case decodingError(Error)  // Error 3
-    case unauthorized  // Error 4
+    case invalidURL
+    case requestFailed(Error)
+    case invalidResponse
+    case decodingError(Error, data: Data?) // Add associated data
+    case unauthorized
     case custom(message: String)
 
     var errorDescription: String? {
         switch self {
         case .invalidURL:
-            return
-                "The API endpoint URL is invalid or could not be constructed."  // Updated description
+            return "The API endpoint URL is invalid or could not be constructed."
         case .requestFailed(let error):
             return "The network request failed: \(error.localizedDescription)"
         case .invalidResponse:
-            return "Received an invalid response from the server (not HTTP)."  // Updated description
-        case .decodingError(let error):
-            return
-                "Failed to decode the response: \(error.localizedDescription)"
+            return "Received an invalid response from the server (not HTTP)."
+        case .decodingError(let error, let data):
+            // Provide more context about the decoding error
+            var details = "Failed to decode the response: \(error.localizedDescription)"
+            if let data = data, let dataString = String(data: data, encoding: .utf8) {
+                details += "\n--- Raw Response Data ---\n\(dataString)\n-------------------------"
+            } else {
+                 details += "\n(Could not retrieve raw response data)"
+            }
+             if let decodingError = error as? DecodingError {
+                 details += "\n--- Decoding Error Context ---\n\(decodingError)\n----------------------------"
+             }
+            return details
         case .unauthorized:
             return "Authentication failed or token expired. Please login again."
         case .custom(let message): return message
@@ -44,15 +52,12 @@ enum NetworkError: Error, LocalizedError {
 class NetworkManager {
     static let shared = NetworkManager()
 
-    // --- Use optional URL and initialize safely ---
     private let baseURL: URL?
-
     private let keychainHelper = KeychainHelper.standard
 
     private init() {
-        // --- Initialize baseURL safely ---
-        // <<< --- REPLACE THE STRING HERE WITH YOUR IP ADDRESS URL --- >>>
-        let urlString = "http://localhost:8000/"  // Example IP, use yours!
+        // <<< --- ENSURE THIS IS YOUR CORRECT BACKEND URL --- >>>
+        let urlString = "http://localhost:8000" // Use your actual backend IP/domain
         // <<< --- END REPLACE --- >>>
 
         if let url = URL(string: urlString) {
@@ -60,17 +65,11 @@ class NetworkManager {
             print("✅ BaseURL initialized successfully: \(url.absoluteString)")
         } else {
             self.baseURL = nil
-            // This is critical - log prominently or assert in debug builds
-            assertionFailure(
-                "❌ CRITICAL: Failed to initialize BaseURL from string: \(urlString)"
-            )
-            print(
-                "❌ CRITICAL: Failed to initialize BaseURL from string: \(urlString)"
-            )
+            assertionFailure("❌ CRITICAL: Failed to initialize BaseURL from string: \(urlString)")
+            print("❌ CRITICAL: Failed to initialize BaseURL from string: \(urlString)")
         }
     }
 
-    
     // --- Generic JSON request function ---
     func request<T: Decodable>(
         endpoint: String,
@@ -79,26 +78,20 @@ class NetworkManager {
         requiresAuth: Bool = true
     ) async throws -> T {
 
-        // Safely unwrap baseURL
         guard let validBaseURL = self.baseURL else {
             print("❌ Cannot make JSON request: BaseURL is invalid.")
             throw NetworkError.invalidURL
         }
 
-        // Construct URLComponents safely
-        guard
-            var urlComponents = URLComponents(
-                url: validBaseURL.appendingPathComponent(endpoint),
-                resolvingAgainstBaseURL: true
-            )
-        else {
-            print(
-                "❌ FAILED to create URLComponents from \(validBaseURL.absoluteString) and endpoint \(endpoint)"
-            )
+        let fullEndpointPath = endpoint.starts(with: "/") ? String(endpoint.dropFirst()) : endpoint
+        let urlWithPath = validBaseURL.appendingPathComponent(fullEndpointPath)
+
+        guard var urlComponents = URLComponents(url: urlWithPath, resolvingAgainstBaseURL: true) else {
+            print("❌ FAILED to create URLComponents from \(urlWithPath.absoluteString)")
             throw NetworkError.invalidURL
         }
-        // Add query parameters here if needed in the future
-        // urlComponents.queryItems = [...]
+         // Example: Add query parameters if needed
+         // urlComponents.queryItems = [URLQueryItem(name: "param", value: "value")]
 
         guard let url = urlComponents.url else {
             print("❌ FAILED to get URL from URLComponents")
@@ -108,16 +101,12 @@ class NetworkManager {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Accept") // Important for receiving JSON
 
-        // Add Authorization header if required
         if requiresAuth {
             if let token = keychainHelper.getAuthToken() {
-                request.setValue(
-                    "Bearer \(token)",
-                    forHTTPHeaderField: "Authorization"
-                )
-                print("🔑 Using Auth Token for JSON request.")
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                // print("🔑 Using Auth Token for JSON request: \(token)") // Optionally log token for debug
             } else {
                 print("⚠️ Auth required for JSON request, but no token found.")
                 throw NetworkError.unauthorized
@@ -127,301 +116,212 @@ class NetworkManager {
         request.httpBody = body
 
         // Execute and handle response
+        var responseData: Data? // Variable to store data for error logging
         do {
             print("🚀 Request (JSON): \(method) \(url.absoluteString)")
-            if let body = body,
-                let bodyString = String(data: body, encoding: .utf8)
-            {
+            if let body = body, let bodyString = String(data: body, encoding: .utf8) {
                 print("   Body: \(bodyString)")
             }
 
-            let (data, response): (Data, URLResponse)  // <<< FIX: Add type annotation
-            do {
-                (data, response) = try await URLSession.shared.data(
-                    for: request
-                )
-                print("✅ URLSession returned successfully.")
-                print("   Response Type: \(type(of: response))")
-                // print("   Response Description: \(response)") // Can be verbose
-            } catch {
-                print(
-                    "❌ Error directly from URLSession.shared.data (JSON): \(error)"
-                )
-                throw NetworkError.requestFailed(error)
-            }
+            let (data, response) = try await URLSession.shared.data(for: request)
+            responseData = data // Store data for potential error logging
 
             guard let httpResponse = response as? HTTPURLResponse else {
-                print(
-                    "❌ Failed to cast JSON response to HTTPURLResponse. Actual type was: \(type(of: response))"
-                )
+                print("❌ Failed to cast JSON response to HTTPURLResponse. Actual type was: \(type(of: response))")
                 throw NetworkError.invalidResponse
             }
 
             print("✅ Response Status: \(httpResponse.statusCode)")
-            if let responseBodyString = String(data: data, encoding: .utf8),
-                !responseBodyString.isEmpty
-            {
-                print("   Response Body: \(responseBodyString)")
+            if let responseBodyString = String(data: data, encoding: .utf8), !responseBodyString.isEmpty {
+                // Limit printing large responses in production
+                // print("   Response Body: \(responseBodyString.prefix(1000))...")
+                 print("   Response Body: \(responseBodyString)") // Print full for debug
             } else {
                 print("   Response Body: (Empty)")
             }
 
-            // Handle status codes
             switch httpResponse.statusCode {
             case 200...299:
                 do {
                     let decoder = JSONDecoder()
+                    // Key strategy MUST match JSON keys (snake_case)
                     decoder.keyDecodingStrategy = .convertFromSnakeCase
                     if data.isEmpty && T.self == EmptyResponse.self {
-                        if let empty = EmptyResponse() as? T {
-                            return empty
-                        } else {
-                            throw NetworkError.custom(
-                                message: "Type mismatch for empty response."
-                            )
-                        }
+                         if let empty = EmptyResponse() as? T { return empty }
+                         else { throw NetworkError.custom(message: "Type mismatch for empty response.") }
                     } else if data.isEmpty {
-                        throw NetworkError.custom(
-                            message:
-                                "Received empty response body for status \(httpResponse.statusCode)"
-                        )
+                        // Allow empty body for certain successful status codes like 204 No Content
+                        if httpResponse.statusCode == 204 && T.self == EmptyResponse.self {
+                             if let empty = EmptyResponse() as? T { return empty }
+                             else { throw NetworkError.custom(message: "Type mismatch for 204 empty response.") }
+                        }
+                        // Throw error if expecting content but body is empty
+                        throw NetworkError.custom(message: "Received empty response body for status \(httpResponse.statusCode) but expected content.")
                     }
+                    // ***** THE ACTUAL DECODING HAPPENS HERE *****
                     let decodedObject = try decoder.decode(T.self, from: data)
                     return decodedObject
                 } catch {
                     print("❌ Decoding Error (JSON): \(error)")
-                    throw NetworkError.decodingError(error)
+                    // Pass the actual data along with the error
+                    throw NetworkError.decodingError(error, data: responseData) // Pass data here
                 }
             case 401:
-                keychainHelper.clearAuthCredentials()
+                keychainHelper.clearAuthCredentials() // Clear potentially invalid token
                 throw NetworkError.unauthorized
-            case 400:
-                let errorDetail = decodeErrorDetail(from: data) ?? "Bad Request"
-                throw NetworkError.custom(message: "Error: \(errorDetail)")
-            case 403:
-                let errorDetail = decodeErrorDetail(from: data) ?? "Forbidden"
-                throw NetworkError.custom(message: "Error: \(errorDetail)")
-            case 404:
-                let errorDetail =
-                    decodeErrorDetail(from: data) ?? "Resource Not Found"
-                throw NetworkError.custom(message: "Error: \(errorDetail)")
-            case 500...599:
-                let errorDetail =
-                    decodeErrorDetail(from: data) ?? "Internal Server Error"
-                throw NetworkError.custom(
-                    message:
-                        "Server Error (\(httpResponse.statusCode)): \(errorDetail)"
-                )
-            default:
-                let errorDetail =
-                    decodeErrorDetail(from: data) ?? "Unknown server error"
-                throw NetworkError.custom(
-                    message:
-                        "Server returned status code \(httpResponse.statusCode): \(errorDetail)"
-                )
+            case 400: throw NetworkError.custom(message: decodeErrorDetail(from: data) ?? "Bad Request")
+            case 403: throw NetworkError.custom(message: decodeErrorDetail(from: data) ?? "Forbidden")
+            case 404: throw NetworkError.custom(message: decodeErrorDetail(from: data) ?? "Resource Not Found at \(url.path)")
+            case 422: throw NetworkError.custom(message: decodeErrorDetail(from: data) ?? "Validation Error") // Common for invalid input
+            case 500...599: throw NetworkError.custom(message: "Server Error (\(httpResponse.statusCode)): \(decodeErrorDetail(from: data) ?? "Internal Server Error")")
+            default: throw NetworkError.custom(message: "Server returned status code \(httpResponse.statusCode): \(decodeErrorDetail(from: data) ?? "Unknown server error")")
             }
         } catch let error as NetworkError {
-            print("❌ Caught NetworkError (JSON): \(error.localizedDescription)")
-            throw error
+            print("❌ Caught NetworkError (JSON) in request func: \(error.localizedDescription)")
+            throw error // Re-throw the specific NetworkError
         } catch {
-            // Catch URLSession errors not already caught
-            print("❌ URLSession Error (JSON): \(error)")
+             // Catch URLSession errors (e.g., network connection lost)
+            print("❌ URLSession Error (JSON) in request func: \(error)")
             throw NetworkError.requestFailed(error)
         }
     }
-    // --- END Generic JSON request function ---
 
     // --- Multipart/Form-Data request function ---
+    // (Keep your existing multipart function as is, just ensure baseURL handling is safe like above)
     func sendMultipartFormDataRequest<T: Decodable>(
         endpoint: String,
         fields: [String: String],
         method: String = "POST"
     ) async throws -> T {
 
-        // Safely unwrap baseURL
         guard let validBaseURL = self.baseURL else {
             print("❌ Cannot make Multipart request: BaseURL is invalid.")
             throw NetworkError.invalidURL
         }
 
-        // --- Add Logging Here ---
-        print("--- Creating URL (Multipart) ---")
-        print("Base URL: \(validBaseURL.absoluteString)")
-        print("Endpoint: \(endpoint)")
-        // --- End Logging ---
+        let fullEndpointPath = endpoint.starts(with: "/") ? String(endpoint.dropFirst()) : endpoint
+        guard let url = URL(string: fullEndpointPath, relativeTo: validBaseURL) else {
+             print("❌ FAILED to create URL from baseURL + endpoint (Multipart)")
+             throw NetworkError.invalidURL
+         }
 
-        guard let url = URL(string: endpoint, relativeTo: validBaseURL) else {
-            print("❌ FAILED to create URL from baseURL + endpoint (Multipart)")
-            throw NetworkError.invalidURL  // Error 0 likely thrown here
-        }
 
         var request = URLRequest(url: url)
         request.httpMethod = method
 
-        // Create boundary and set Content-Type
         let boundary = "Boundary-\(UUID().uuidString)"
-        request.setValue(
-            "multipart/form-data; boundary=\(boundary)",
-            forHTTPHeaderField: "Content-Type"
-        )
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
-        // Create the request body
         var body = Data()
         for (key, value) in fields {
             body.append("--\(boundary)\r\n")
-            body.append(
-                "Content-Disposition: form-data; name=\"\(key)\"\r\n\r\n"
-            )
+            body.append("Content-Disposition: form-data; name=\"\(key)\"\r\n\r\n")
             body.append("\(value)\r\n")
         }
         body.append("--\(boundary)--\r\n")
 
         request.httpBody = body
 
-        // Execute and handle response
+         // Add Auth token if needed for multipart requests (login usually doesn't, but others might)
+         // if requiresAuth { ... add token header ... }
+
+        var responseData: Data? // For error logging
         do {
             print("🚀 Request (Multipart): \(method) \(url.absoluteString)")
             print("   Fields: \(fields)")
 
-            let (data, response): (Data, URLResponse)  // <<< FIX: Add type annotation
-            do {
-                (data, response) = try await URLSession.shared.data(
-                    for: request
-                )
-                print("✅ URLSession returned successfully.")
-                print("   Response Type: \(type(of: response))")
-                // print("   Response Description: \(response)") // Can be verbose
-            } catch {
-                print(
-                    "❌ Error directly from URLSession.shared.data (Multipart): \(error)"
-                )
-                throw NetworkError.requestFailed(error)
-            }
+            let (data, response) = try await URLSession.shared.data(for: request)
+             responseData = data
 
             guard let httpResponse = response as? HTTPURLResponse else {
-                print(
-                    "❌ Failed to cast Multipart response to HTTPURLResponse. Actual type was: \(type(of: response))"
-                )
-                throw NetworkError.invalidResponse  // Error 2
+                print("❌ Failed to cast Multipart response to HTTPURLResponse. Actual type was: \(type(of: response))")
+                throw NetworkError.invalidResponse
             }
 
             print("✅ Response Status: \(httpResponse.statusCode)")
-            if let responseBodyString = String(data: data, encoding: .utf8),
-                !responseBodyString.isEmpty
-            {
-                print("   Response Body: \(responseBodyString)")
-            } else {
-                print("   Response Body: (Empty)")
-            }
+             if let responseBodyString = String(data: data, encoding: .utf8), !responseBodyString.isEmpty {
+                 print("   Response Body: \(responseBodyString)")
+             } else {
+                 print("   Response Body: (Empty)")
+             }
 
-            // Handle status codes
             switch httpResponse.statusCode {
             case 200...299:
                 do {
                     let decoder = JSONDecoder()
-//                    decoder.keyDecodingStrategy = .convertFromSnakeCase
+                    decoder.keyDecodingStrategy = .convertFromSnakeCase // <<< ENSURE THIS IS STILL HERE
                     let decodedObject = try decoder.decode(T.self, from: data)
                     return decodedObject
                 } catch {
-                    // --- Enhanced Logging ---
                     print("❌ Decoding Error (Multipart): \(error)")
-                    print(
-                        "   Error Localized Description: \(error.localizedDescription)"
-                    )
-                    if let decodingError = error as? DecodingError {
-                        print("   Decoding Error Context: \(decodingError)")  // Provides detailed context
-                    }
-                    // --- End Enhanced Logging ---
-                    throw NetworkError.decodingError(error)
+                    throw NetworkError.decodingError(error, data: responseData) // Pass data
                 }
-            case 401:
-                let errorDetail =
-                    decodeErrorDetail(from: data) ?? "Invalid Credentials"
-                throw NetworkError.custom(message: errorDetail)
-            case 422:
-                let errorDetail =
-                    decodeErrorDetail(from: data) ?? "Validation Error"
-                throw NetworkError.custom(
-                    message: "Login Error: \(errorDetail)"
-                )
-            default:
-                let errorDetail =
-                    decodeErrorDetail(from: data)
-                    ?? "Unknown server error during login"
-                throw NetworkError.custom(
-                    message:
-                        "Server returned status code \(httpResponse.statusCode): \(errorDetail)"
-                )
+            case 401: throw NetworkError.unauthorized // Or custom message if specific login error
+            case 422: throw NetworkError.custom(message: decodeErrorDetail(from: data) ?? "Validation Error (e.g., invalid credentials)")
+            default: throw NetworkError.custom(message: "Server returned status code \(httpResponse.statusCode): \(decodeErrorDetail(from: data) ?? "Unknown server error")")
             }
         } catch let error as NetworkError {
-            print(
-                "❌ Caught NetworkError (Multipart): \(error.localizedDescription)"
-            )
+            print("❌ Caught NetworkError (Multipart): \(error.localizedDescription)")
             throw error
         } catch {
             print("❌ URLSession Error (Multipart): \(error)")
             throw NetworkError.requestFailed(error)
         }
     }
-    // --- END Multipart/Form-Data request function ---
 
-    // Helper function to decode errors
-    private func decodeErrorDetail(from data: Data) -> String? {
+    // Helper function to decode errors (Handles basic { "detail": "..." } structure)
+    private func decodeErrorDetail(from data: Data?) -> String? {
+        guard let data = data, !data.isEmpty else { return nil }
+
+        // First, try decoding the standard {"detail": "..."} structure
         struct ErrorResponse: Decodable {
-            let detail: String?  // Adjust if your API error structure is different
+            let detail: String?
+            // Add other potential error fields if your API uses them
+            let message: String?
+            let error: String?
+            // If errors can be arrays or objects:
+            // let errors: [String]? or let errors: [String: [String]]?
         }
-        if let errorResponse = try? JSONDecoder().decode(
-            ErrorResponse.self,
-            from: data
-        ) {
-            return errorResponse.detail
+
+        if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+            return errorResponse.detail ?? errorResponse.message ?? errorResponse.error // Return first non-nil message
         }
-        return String(data: data, encoding: .utf8)?.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
+
+        // If that fails, return the raw string representation as a fallback
+        return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    // --- Specific API call function for Login ---
-    // Uses the multipart sender internally
-    func login(credentials: LoginRequestBody) async throws -> AuthResponse {
-        let endpoint = "api/auth/login"  // Relative endpoint path
 
+    // --- Specific API call functions ---
+
+    func login(credentials: LoginRequestBody) async throws -> AuthResponse {
+        let endpoint = "/api/auth/login" // Ensure leading slash if base URL doesn't have trailing slash
         let fields = [
             "username": credentials.username,
             "password": credentials.password,
         ]
-        // Call the multipart request sender
-        return try await sendMultipartFormDataRequest(
-            endpoint: endpoint,
-            fields: fields,
-            method: "POST"
-        )
+        return try await sendMultipartFormDataRequest(endpoint: endpoint, fields: fields, method: "POST")
     }
-    // --- End login function ---
 
     func fetchDoctorAppointments() async throws -> [Appointment] {
-            let endpoint = "api/appointment/my-appointments" // Endpoint from React DoctorNoteForm
-            return try await request(endpoint: endpoint, method: "GET", requiresAuth: true)
-        }
+        let endpoint = "/api/appointment/my-appointments"
+        // Use the generic JSON request function
+        return try await request(endpoint: endpoint, method: "GET", requiresAuth: true)
+    }
 
-        // --- Fetch Health Records for a Specific Patient ---
-        func fetchPatientHealthRecords(patientId: Int) async throws -> [HealthRecord] {
-            let endpoint = "api/health-record/patient/\(patientId)" // Endpoint from React PatientHealthRecordPage
-            // Note: The response might be a single object or an array. Adjust T if needed.
-            // Assuming the API returns an array of records for the patient.
-            return try await request(endpoint: endpoint, method: "GET", requiresAuth: true)
-        }
+    func fetchPatientHealthRecords(patientId: Int) async throws -> [HealthRecord] {
+        let endpoint = "/api/health-record/patient/\(patientId)"
+        return try await request(endpoint: endpoint, method: "GET", requiresAuth: true)
+    }
 
-        // --- Create a New Doctor Note ---
-        func createDoctorNote(noteData: CreateDoctorNoteRequestBody) async throws -> HealthRecord {
-            // Endpoint from React NewDoctorNotePage
-            // The request body structure is defined by CreateDoctorNoteRequestBody
-            let endpoint = "api/health-record/doctor-note"
-            let body = try JSONEncoder().encode(noteData)
-
-            // Use the generic request function for POST with JSON body
-            return try await request(endpoint: endpoint, method: "POST", body: body, requiresAuth: true)
-        }
+    func createDoctorNote(noteData: CreateDoctorNoteRequestBody) async throws -> HealthRecord {
+        let endpoint = "/api/health-record/doctor-note"
+        let encoder = JSONEncoder()
+        // Ensure snake_case encoding if the API expects it for request bodies
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        let body = try encoder.encode(noteData)
+        return try await request(endpoint: endpoint, method: "POST", body: body, requiresAuth: true)
+    }
 }
 
 // Define an empty response type for API calls that return 2xx but no body
