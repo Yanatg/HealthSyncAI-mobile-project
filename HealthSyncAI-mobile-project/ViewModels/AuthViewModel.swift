@@ -1,6 +1,4 @@
 // HealthSyncAI-mobile-project/ViewModels/AuthViewModel.swift
-// NO CHANGES NEEDED for role-based redirection logic compared to the previous version.
-// It already sets loggedInUserRole based on selectedRole on success.
 import Foundation
 import Combine
 
@@ -12,13 +10,14 @@ class AuthViewModel: ObservableObject {
     @Published var selectedRole: UserRole = .patient // Role selected in the UI
     @Published var errorMessage: String? = nil
     @Published var isLoading: Bool = false
-    @Published var isAuthenticated: Bool = false      // Triggers UI change in LoginView
-    @Published var loggedInUserRole: UserRole? = nil // Set on successful login
+    // REMOVE: @Published var isAuthenticated: Bool = false
+    // REMOVE: @Published var loggedInUserRole: UserRole? = nil
 
     private let networkManager = NetworkManager.shared
     private let keychainHelper = KeychainHelper.standard
 
-    func login() {
+    // Function now takes AppState to update it directly
+    func login(appState: AppState) {
         guard !username.isEmpty, !password.isEmpty else {
             errorMessage = "Username and Password cannot be empty."
             return
@@ -27,29 +26,26 @@ class AuthViewModel: ObservableObject {
 
         isLoading = true
         errorMessage = nil
-        isAuthenticated = false // Reset state before attempt
-        loggedInUserRole = nil  // Reset state before attempt
+        // REMOVE: isAuthenticated = false
+        // REMOVE: loggedInUserRole = nil
 
-        // Capture selected role *before* async task
-        let roleToLoginAs = selectedRole
+        let roleToLoginAs = selectedRole // Capture role before async task
 
         Task {
             do {
                 let loginCredentials = LoginRequestBody(username: username, password: password)
                 let authResponse: AuthResponse = try await networkManager.login(credentials: loginCredentials)
 
-                // --- Success ---
+                // --- Success: Save to Keychain FIRST ---
                 print("✅ Login successful!")
                 keychainHelper.saveAuthToken(authResponse.accessToken)
                 let userIdString = String(authResponse.userId)
                 keychainHelper.saveUserId(userIdString)
-                // ** Save the role that was selected during this login attempt **
-                keychainHelper.saveUserRole(roleToLoginAs)
+                keychainHelper.saveUserRole(roleToLoginAs) // Save the role used for login
 
-                // ** Update the ViewModel's state **
-                // This will be picked up by LoginView's .onChange
-                self.loggedInUserRole = roleToLoginAs
-                self.isAuthenticated = true
+                // --- Update AppState ---
+                appState.login(role: roleToLoginAs, userId: authResponse.userId) // Update the central state
+
                 self.password = "" // Clear password field
 
             } catch let error as NetworkError {

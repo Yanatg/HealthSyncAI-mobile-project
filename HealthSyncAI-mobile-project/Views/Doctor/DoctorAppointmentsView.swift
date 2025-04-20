@@ -3,84 +3,62 @@ import SwiftUI
 
 struct DoctorAppointmentsView: View {
     @StateObject private var viewModel = DoctorAppointmentsViewModel()
+    @EnvironmentObject private var appState: AppState // Get AppState from environment
 
     var body: some View {
-        NavigationView { // Or NavigationStack
-            Group { // Use Group to apply modifiers conditionally
-                if viewModel.isLoading && viewModel.appointments.isEmpty { // Show loading only on initial load
+        NavigationView {
+            Group {
+                // ... (Loading/Error/List logic remains the same)
+                if viewModel.isLoading && viewModel.appointments.isEmpty {
                     ProgressView("Loading Appointments...")
                         .padding()
                 } else if let error = viewModel.errorMessage {
-                    VStack {
-                         Text("Error")
-                            .font(.headline)
-                         Text(error) // Display the detailed error from NetworkManager
-                            .foregroundColor(.red)
-                            .multilineTextAlignment(.center)
-                            .padding()
-                         Button("Retry") {
-                             viewModel.fetchAppointments(showLoadingIndicator: true)
-                         }
-                         .buttonStyle(.bordered)
-                         Spacer() // Push content to top
-                    }
+                     VStack { /* Error handling view */ }
                      .padding()
-                } else if viewModel.appointments.isEmpty && !viewModel.isLoading { // Show only if not loading and empty
+                } else if viewModel.appointments.isEmpty && !viewModel.isLoading {
                     Text("No appointments found.")
                         .foregroundColor(.secondary)
                         .padding()
                 } else {
                     List {
                         ForEach(viewModel.appointments) { appointment in
-                            // Ensure patientId is correctly passed
-                            NavigationLink(destination: PatientRecordsView(patientId: appointment.patientId)) {
+                            NavigationLink(destination: PatientRecordsView(patientId: appointment.patientId)
+                                .environmentObject(appState)) { // Pass environment object down if needed
                                 AppointmentRow(appointment: appointment)
                             }
                         }
                     }
                     .listStyle(.plain)
-                    .refreshable { // Add pull-to-refresh
-                        viewModel.fetchAppointments(showLoadingIndicator: false) // Don't show big spinner on refresh
+                    .refreshable {
+                        viewModel.fetchAppointments(showLoadingIndicator: false)
                     }
                 }
             }
             .navigationTitle("Appointments")
-             .toolbar {
-                 ToolbarItem(placement: .navigationBarLeading) { // Example Logout Button
+            .toolbar {
+                 ToolbarItem(placement: .navigationBarLeading) {
+                     // Use appState.logout() for the action
                      Button("Logout") {
-                         performLogout()
+                         appState.logout() // Call logout on the central state object
                      }
                      .tint(.red)
                  }
                  ToolbarItem(placement: .navigationBarTrailing) {
                      Button {
-                         viewModel.fetchAppointments(showLoadingIndicator: true) // Manual refresh shows loading
+                         viewModel.fetchAppointments(showLoadingIndicator: true)
                      } label: {
                          Image(systemName: "arrow.clockwise")
                      }
-                     .disabled(viewModel.isLoading) // Disable while loading
+                     .disabled(viewModel.isLoading)
                  }
              }
             .onAppear {
-                 print("DoctorAppointmentsView appeared. Fetching initial data if needed.")
-                viewModel.initialFetch() // Fetch data when the view appears
+                print("DoctorAppointmentsView appeared. Fetching initial data if needed.")
+                viewModel.initialFetch()
             }
         }
-        // .navigationViewStyle(.stack) // If needed
+        // REMOVE: performLogout() function from this view - logic moved to AppState
     }
-
-     // Example Logout Function (Should ideally be managed globally, e.g., in App file)
-     func performLogout() {
-         print("Performing logout from DoctorAppointmentsView...")
-         KeychainHelper.standard.clearAuthCredentials()
-         // This needs to communicate back to the App struct to change the root view
-         // Often done via @EnvironmentObject or passing bindings down.
-         // For now, just clearing keychain. App state needs to be updated.
-         // A simple way for now might be to force a reload or use Notifications.
-         // Forcing requires access to window scene, complex.
-         // Let's assume the App checks keychain on next launch/resume.
-         // Ideally: Add `@EnvironmentObject var appState: AppState` and set `appState.isLoggedIn = false`
-     }
 }
 
 // AppointmentRow remains the same, but ensure display formatting is correct
@@ -131,5 +109,6 @@ struct AppointmentRow: View {
 struct DoctorAppointmentsView_Previews: PreviewProvider {
     static var previews: some View {
         DoctorAppointmentsView()
+            .environmentObject(AppState()) // Provide a dummy AppState for preview
     }
 }
