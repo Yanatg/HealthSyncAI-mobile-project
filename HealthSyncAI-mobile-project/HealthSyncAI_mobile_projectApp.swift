@@ -4,99 +4,101 @@ import SwiftUI
 
 @main
 struct HealthSyncAI_mobile_projectApp: App {
-    // Use AppState as the single source of truth for auth state
     @StateObject private var appState = AppState()
+    // --- ADDED: State for splash screen visibility ---
+    @State private var showSplashScreen = true
 
     var body: some Scene {
         WindowGroup {
-            // View hierarchy now depends on appState
-            if appState.isLoggedIn {
-                switch appState.userRole {
-                case .patient:
-                    // --- Use TabView for Patient ---
-                    TabView { // <<< START TabView
-                        // Records Tab
-                        NavigationView {
-                            PatientRecordsView(patientId: appState.userId ?? 0)
-                        }
-                        .tabItem {
-                            Label(
-                                "Records",
-                                systemImage: "list.bullet.clipboard.fill"
-                            )
-                        }
-                        .environmentObject(appState)
-
-                        // Chat Tab
-                        NavigationView {
-                            ChatView(appState: appState)
-                        }
-                        .tabItem { Label("Chat", systemImage: "message.fill") }
-                        // No need for separate .environmentObject here, ChatView init receives it
-
-                        // Appointments Tab
-                        NavigationView {
-                            // Use the actual Patient Appointments View
-                            MyAppointmentsView()
-                        }
-                        .tabItem {
-                            Label("Appointments", systemImage: "calendar")
-                        }
-                        .environmentObject(appState)
-
-                        // --- UPDATED: Dashboard Tab ---
-                        NavigationView {
-                            // Use the new DashboardView
-                            DashboardView()
-                        }
-                        .tabItem { // <<< START .tabItem closure
-                            Label(
-                                "Dashboard",
-                                systemImage: "square.grid.2x2.fill" // Or "chart.pie.fill"
-                            )
-                            // --- REMOVE EXTRA BRACE HERE ---
-                        } // <<< END .tabItem closure
-                        .environmentObject(appState) // Apply environment object after .tabItem
-
-                        // --- REMOVE EXTRA BRACE HERE ---
-
-                    } // <<< END TabView
-                    .onAppear {
-                        print(
-                            "App Body: Showing Patient TabView (User ID: \(appState.userId ?? 0))"
-                        )
-                    }
-
-                case .doctor:
-                    // Doctor view remains the same for now
-                    DoctorAppointmentsView()
-                        .environmentObject(appState)
+            // --- UPDATED: Main content switching ---
+            ZStack { // Use ZStack to layer splash over content potentially
+                // --- Splash Screen Logic ---
+                if showSplashScreen {
+                    SplashScreenView()
+                        .transition(.opacity) // Fade transition
                         .onAppear {
-                            print(
-                                "App Body: Showing Doctor View (User ID: \(appState.userId ?? 0))"
-                            )
+                            // Hide splash screen after a delay
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { // Adjust delay (e.g., 2.0 seconds)
+                                withAnimation { // Animate the transition
+                                    showSplashScreen = false
+                                }
+                            }
                         }
+                } else {
+                    // --- Existing Main Content Logic ---
+                    // View hierarchy now depends on appState
+                    if appState.isLoggedIn {
+                        switch appState.userRole {
+                        case .patient:
+                            // Patient TabView
+                            patientTabView
+                                .environmentObject(appState) // Pass state down
+                                .transition(.opacity) // Fade in main content
 
-                case .none:
-                    // Fallback if logged in but role is somehow nil
-                    VStack {
-                        Text("Error: User logged in but role is missing.")
-                        Button("Logout") { appState.logout() }
-                            .padding()
+                        case .doctor:
+                            // Doctor view
+                            DoctorAppointmentsView()
+                                .environmentObject(appState)
+                                .transition(.opacity) // Fade in main content
+                                .onAppear { print("App Body: Showing Doctor View (User ID: \(appState.userId ?? 0))") }
+
+                        case .none:
+                            // Fallback error view
+                            errorView
+                                .transition(.opacity) // Fade in main content
+                        }
+                    } else {
+                        // Show LoginView
+                        LoginView()
+                            .environmentObject(appState)
+                            .transition(.opacity) // Fade in main content
+                            .onAppear { print("App Body: Showing Login View") }
                     }
-                    .onAppear {
-                        print(
-                            "App Body: Error - Role is nil despite being logged in."
-                        )
-                    }
+                    // --- End Existing Main Content Logic ---
                 }
-
-            } else {
-                // Show LoginView, passing AppState
-                LoginView()
-                    .environmentObject(appState)
-                    .onAppear { print("App Body: Showing Login View") }
             }
+            // --- End Main content switching ---
         }
     }
+
+    // --- Extracted Patient TabView for clarity ---
+    private var patientTabView: some View {
+        TabView {
+            // Records Tab
+            NavigationView { PatientRecordsView(patientId: appState.userId ?? 0) }
+                .tabItem { Label("Records", systemImage: "list.bullet.clipboard.fill") }
+
+
+            // Chat Tab
+            NavigationView { ChatView(appState: appState) }
+                .tabItem { Label("Chat", systemImage: "message.fill") }
+
+            // Appointments Tab
+            NavigationView { MyAppointmentsView() }
+                .tabItem { Label("Appointments", systemImage: "calendar") }
+
+
+            // Dashboard Tab
+            NavigationView { DashboardView() }
+                .tabItem { Label("Dashboard", systemImage: "square.grid.2x2.fill") }
+
+        }
+        .onAppear { print("App Body: Showing Patient TabView (User ID: \(appState.userId ?? 0))") }
+        // EnvironmentObject is applied below the switch case now, or individually if needed
+    }
+
+    // --- Extracted Error View for clarity ---
+    private var errorView: some View {
+        VStack {
+            Text("Error: User logged in but role is missing.")
+            Button("Logout") { appState.logout() }
+                .padding()
+        }
+        .onAppear { print("App Body: Error - Role is nil despite being logged in.") }
+    }
 }
+
+// Make sure placeholder views exist if you haven't implemented them fully yet
+// struct DoctorAppointmentsView: View { var body: some View { Text("Doctor View Placeholder") } }
+// struct LoginView: View { var body: some View { Text("Login View Placeholder") } }
+// PatientRecordsView, ChatView, MyAppointmentsView, DashboardView should exist as defined previously
