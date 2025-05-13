@@ -1,14 +1,9 @@
 
 ## 🖼️ Screenshots & GIFs
 
-<!-- TODO: Add attractive screenshots and GIFs of the app in action! -->
-<!--
-<p align="center">
-  <img src="path/to/screenshot1.png" width="200"/>
-  <img src="path/to/screenshot2.png" width="200"/>
-  <img src="path/to/gif1.gif" width="200"/>
-</p>
--->
+![1](https://github.com/user-attachments/assets/819ca63b-9ae3-4f59-b6be-1ebaa9126e28)
+![2](https://github.com/user-attachments/assets/68371033-5288-4182-973f-5ff96f736564)
+
 
 ## ⚙️ Setup & Installation
 
