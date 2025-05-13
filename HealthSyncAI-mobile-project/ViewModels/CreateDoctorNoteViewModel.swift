@@ -1,5 +1,3 @@
-// HealthSyncAI-mobile-project/ViewModels/CreateDoctorNoteViewModel.swift
-// NEW FILE
 import Foundation
 import Combine
 import SwiftUI // For Binding

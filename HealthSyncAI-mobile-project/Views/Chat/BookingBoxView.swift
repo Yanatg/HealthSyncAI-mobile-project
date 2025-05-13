@@ -1,5 +1,3 @@
-// HealthSyncAI-mobile-project/Views/Chat/BookingBoxView.swift
-// UPDATED FILE
 import SwiftUI
 
 struct BookingBoxView: View {

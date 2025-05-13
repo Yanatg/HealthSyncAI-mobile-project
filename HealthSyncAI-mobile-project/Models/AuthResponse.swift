@@ -1,4 +1,3 @@
-// Models/AuthResponse.swift
 import Foundation
 
 struct AuthResponse: Codable {

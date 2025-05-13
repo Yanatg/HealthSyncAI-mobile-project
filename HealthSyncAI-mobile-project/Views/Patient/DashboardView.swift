@@ -1,6 +1,3 @@
-// HealthSyncAI-mobile-project/Views/Patient/DashboardView.swift
-// UPDATED FILE
-
 import SwiftUI
 
 struct DashboardView: View {

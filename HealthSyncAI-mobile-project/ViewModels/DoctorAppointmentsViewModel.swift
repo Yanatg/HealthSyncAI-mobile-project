@@ -1,4 +1,3 @@
-// HealthSyncAI-mobile-project/ViewModels/DoctorAppointmentsViewModel.swift
 import Foundation
 import Combine
 

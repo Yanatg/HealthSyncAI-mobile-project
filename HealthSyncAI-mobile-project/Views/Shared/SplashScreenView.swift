@@ -1,6 +1,3 @@
-// HealthSyncAI-mobile-project/Views/Shared/SplashScreenView.swift
-// NEW FILE
-
 import SwiftUI
 
 struct SplashScreenView: View {

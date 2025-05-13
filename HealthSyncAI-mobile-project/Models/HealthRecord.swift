@@ -1,5 +1,3 @@
-// HealthSyncAI-mobile-project/Models/HealthRecord.swift
-// UPDATED FILE
 import Foundation
 
 // Corresponds to HealthRecord in React lib/type.ts and API response

@@ -1,5 +1,3 @@
-// HealthSyncAI-mobile-project/Services/NetworkManager.swift
-// UPDATED FILE
 import Foundation
 
 // --- Data extension for multipart helper ---

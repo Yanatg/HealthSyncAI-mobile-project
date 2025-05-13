@@ -1,6 +1,3 @@
-// HealthSyncAI-mobile-project/ViewModels/ChatViewModel.swift
-// UPDATED FILE incorporating Combine listener for BookingViewModel state
-
 import Foundation
 import Combine
 import SwiftUI // For Color and Date

@@ -1,5 +1,4 @@
-// HealthSyncAI-mobile-project/ViewModels/PatientRecordsViewModel.swift
-// NEW FILE
+
 import Foundation
 import Combine
 

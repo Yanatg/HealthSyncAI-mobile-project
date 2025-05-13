@@ -1,5 +1,3 @@
-// HealthSyncAI-mobile-project/Views/Chat/ChatView.swift
-// UPDATED FILE
 import SwiftUI
 
 struct ChatView: View {

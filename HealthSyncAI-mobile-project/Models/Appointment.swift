@@ -1,5 +1,3 @@
-// HealthSyncAI-mobile-project/Models/Appointment.swift
-// UPDATED FILE
 import Foundation
 import SwiftUI // Needed for Color
 

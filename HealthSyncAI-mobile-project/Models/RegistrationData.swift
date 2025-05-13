@@ -1,4 +1,3 @@
-// HealthSyncAI-mobile-project/Models/RegistrationData.swift
 import Foundation
 
 // Base data common to both patient and doctor registration

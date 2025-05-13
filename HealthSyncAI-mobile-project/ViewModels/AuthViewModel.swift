@@ -1,5 +1,3 @@
-// HealthSyncAI-mobile-project/ViewModels/AuthViewModel.swift
-// UPDATED FILE
 import Foundation
 import Combine
 import SwiftUI // For Date

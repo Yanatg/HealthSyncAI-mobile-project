@@ -1,5 +1,3 @@
-// HealthSyncAI-mobile-project/Views/Patient/PatientRecordsView.swift
-// UPDATED FILE
 import SwiftUI
 
 struct PatientRecordsView: View {

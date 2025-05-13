@@ -1,5 +1,3 @@
-// HealthSyncAI-mobile-project/Models/Chat.swift
-// NEW FILE
 import Foundation
 
 // Represents a single chat message exchange within a room

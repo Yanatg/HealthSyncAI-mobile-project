@@ -1,4 +1,3 @@
-// Models/UserRole.swift
 import Foundation
 
 // Define the UserRole enum

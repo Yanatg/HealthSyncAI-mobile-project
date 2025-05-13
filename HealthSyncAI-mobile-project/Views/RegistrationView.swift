@@ -1,4 +1,3 @@
-// HealthSyncAI-mobile-project/Views/RegistrationView.swift
 import SwiftUI
 
 struct RegistrationView: View {

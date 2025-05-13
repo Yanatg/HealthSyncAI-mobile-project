@@ -1,4 +1,3 @@
-// HealthSyncAI-mobile-project/ViewModels/BookingViewModel.swift
 import Foundation
 import Combine
 import SwiftUI

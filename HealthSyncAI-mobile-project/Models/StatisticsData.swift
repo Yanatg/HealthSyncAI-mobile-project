@@ -1,6 +1,3 @@
-// HealthSyncAI-mobile-project/Models/StatisticsData.swift
-// NEW FILE
-
 import Foundation
 
 struct StatisticsData: Codable, Identifiable {

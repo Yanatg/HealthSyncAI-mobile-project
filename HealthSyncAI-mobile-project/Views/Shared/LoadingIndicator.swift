@@ -1,5 +1,3 @@
-// HealthSyncAI-mobile-project/Views/Shared/LoadingIndicator.swift
-// NEW FILE (within a Views/Shared subfolder if desired)
 import SwiftUI
 
 struct LoadingIndicator: View {

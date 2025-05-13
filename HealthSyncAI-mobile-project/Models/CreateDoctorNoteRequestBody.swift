@@ -1,5 +1,3 @@
-// HealthSyncAI-mobile-project/Models/CreateDoctorNoteRequestBody.swift
-// NEW FILE
 import Foundation
 
 // Structure matching the JSON body needed for the POST /api/health-record/doctor-note endpoint

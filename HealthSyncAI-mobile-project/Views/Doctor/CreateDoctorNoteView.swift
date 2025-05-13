@@ -1,5 +1,3 @@
-// HealthSyncAI-mobile-project/Views/Doctor/CreateDoctorNoteView.swift
-// NEW FILE
 import SwiftUI
 
 struct CreateDoctorNoteView: View {

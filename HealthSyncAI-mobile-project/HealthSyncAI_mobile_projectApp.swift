@@ -1,5 +1,3 @@
-// HealthSyncAI-mobile-project/HealthSyncAI_mobile_projectApp.swift
-// UPDATED FILE
 import SwiftUI
 
 @main

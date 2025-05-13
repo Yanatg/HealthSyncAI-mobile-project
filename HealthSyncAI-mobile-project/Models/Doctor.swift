@@ -1,5 +1,3 @@
-// HealthSyncAI-mobile-project/Models/Doctor.swift
-// NEW or UPDATED FILE
 import Foundation
 
 struct Doctor: Codable, Identifiable {

@@ -1,5 +1,3 @@
-// HealthSyncAI-mobile-project/Views/Chat/ChatMessageView.swift
-// NEW FILE
 import SwiftUI
 // If using MarkdownUI: import MarkdownUI
 

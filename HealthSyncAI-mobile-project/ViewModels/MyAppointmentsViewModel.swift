@@ -1,6 +1,3 @@
-// HealthSyncAI-mobile-project/ViewModels/MyAppointmentsViewModel.swift
-// NEW FILE (or copy/rename/modify DoctorAppointmentsViewModel)
-
 import Foundation
 import Combine
 

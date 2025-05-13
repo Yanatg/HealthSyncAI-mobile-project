@@ -1,6 +1,3 @@
-// HealthSyncAI-mobile-project/ViewModels/DashboardViewModel.swift
-// NEW FILE
-
 import Foundation
 import Combine
 

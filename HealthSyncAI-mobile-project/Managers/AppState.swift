@@ -1,5 +1,3 @@
-// HealthSyncAI-mobile-project/Managers/AppState.swift (or ViewModels)
-// NEW FILE
 import Foundation
 import Combine
 

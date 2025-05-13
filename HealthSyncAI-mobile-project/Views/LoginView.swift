@@ -1,4 +1,3 @@
-// HealthSyncAI-mobile-project/Views/LoginView.swift
 import SwiftUI
 
 struct LoginView: View {

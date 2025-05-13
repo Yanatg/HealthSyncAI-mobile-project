@@ -1,5 +1,3 @@
-// HealthSyncAI-mobile-project/Utils/KeychainHelper.swift
-// UPDATED FILE
 import Foundation
 import Security
 
